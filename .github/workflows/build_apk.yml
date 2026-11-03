@@ -51,14 +51,17 @@ jobs:
           name: offline-kanji-practice-v1-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Rename APK for release download
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
+
       - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "v1.0.0 — Offline Kanji Practice App"
+          body: "Direct APK download for Android. Download **offline-kanji-practice-v1.apk** on your Android phone and tap to install."
+          files: |
+            build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
+            build/app/outputs/flutter-apk/app-release.apk
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
-          gh release create v1.0.0 \
-            build/app/outputs/flutter-apk/app-release.apk \
-            build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk \
-            --title "v1.0.0 — Offline Kanji Practice App" \
-            --notes "Direct APK download for Android. Download **offline-kanji-practice-v1.apk** on your Android phone and tap to install." \
-            --clobber
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
