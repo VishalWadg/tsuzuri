@@ -18,14 +18,16 @@ class SettingsScreen extends ConsumerWidget {
     final file = File(p.join(dir.path, 'kanji_user_progress_backup.json'));
     await file.writeAsString(jsonBackup, flush: true);
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: 'Offline Kanji Practice Progress Backup',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'Offline Kanji Practice Progress Backup',
+      ),
     );
   }
 
   Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
