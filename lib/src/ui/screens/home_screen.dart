@@ -1,0 +1,251 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/models.dart';
+import '../../providers/app_providers.dart';
+import 'attributions_screen.dart';
+import 'practice_screen.dart';
+import 'settings_screen.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(progressRefreshTriggerProvider);
+    final contentDb = ref.watch(contentDatabaseProvider);
+    final userDb = ref.watch(userDatabaseProvider);
+    final queue = ref.watch(dailyQueueProvider);
+
+    final dueCount = userDb.getDueCards(now: DateTime.now()).length;
+    final studiedCount = userDb.getStudiedCodepoints().length;
+    final totalKanji = contentDb.totalKanjiCount;
+    final allKanji = contentDb.getAllKanjiOrdered();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Offline Kanji Practice (v1)'),
+        actions: [
+          IconButton(
+            tooltip: 'Settings & Backup',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Data Sources & Licenses',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const AttributionsScreen()),
+              );
+            },
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Summary Card
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Writing Queue',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _StatBadge(
+                        label: 'Due Now',
+                        value: '$dueCount',
+                        color: const Color(0xFFC62828),
+                      ),
+                      const SizedBox(width: 12),
+                      _StatBadge(
+                        label: 'In Queue',
+                        value: '${queue.length}',
+                        color: const Color(0xFF1565C0),
+                      ),
+                      const SizedBox(width: 12),
+                      _StatBadge(
+                        label: 'Studied',
+                        value: '$studiedCount / $totalKanji',
+                        color: const Color(0xFF2E7D32),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: queue.isEmpty
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => PracticeScreen(queue: queue),
+                                ),
+                              );
+                            },
+                      icon: const Icon(Icons.edit_note),
+                      label: Text(
+                        queue.isEmpty
+                            ? 'All Caught Up for Today!'
+                            : 'Start Practice Session (${queue.length} Kanji)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          Text(
+            'Kanji Deck (Tap any character to practice)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 12),
+
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.92,
+            ),
+            itemCount: allKanji.length,
+            itemBuilder: (context, index) {
+              final kanji = allKanji[index];
+              final card = userDb.getCard(kanji.codepoint);
+              return _KanjiGridTile(
+                kanji: kanji,
+                progress: card,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PracticeScreen(
+                        queue: [
+                          PracticeQueueItem(
+                            kanji: kanji,
+                            existingProgress: card,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatBadge extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatBadge({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KanjiGridTile extends StatelessWidget {
+  final KanjiCharacter kanji;
+  final UserCardProgress? progress;
+  final VoidCallback onTap;
+
+  const _KanjiGridTile({
+    required this.kanji,
+    required this.progress,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isStudied = progress != null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isStudied ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+            width: isStudied ? 1.6 : 1.0,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              kanji.literal,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              kanji.meanings.first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
