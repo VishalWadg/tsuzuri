@@ -8,6 +8,8 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,3 +50,15 @@ jobs:
         with:
           name: offline-kanji-practice-v1-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
+          gh release create v1.0.0 \
+            build/app/outputs/flutter-apk/app-release.apk \
+            build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk \
+            --title "v1.0.0 — Offline Kanji Practice App" \
+            --notes "Direct APK download for Android. Download **offline-kanji-practice-v1.apk** on your Android phone and tap to install." \
+            --clobber
