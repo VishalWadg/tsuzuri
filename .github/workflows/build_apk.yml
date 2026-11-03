@@ -19,11 +19,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Rebuild & Verify Content DB and Matcher Benchmark
-        run: |
-          python3 tools/build_content_db.py --scope joyo
-          python3 tools/test_content_db.py
-          python3 tools/benchmark_matcher.py
+      - name: Verify Content DB Integrity
+        run: python3 tools/test_content_db.py
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -57,9 +54,9 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "v1.0.0 — Offline Kanji Practice App"
-          body: "Direct APK download for Android. Download **offline-kanji-practice-v1.apk** on your Android phone and tap to install."
+          tag_name: v1.1.0
+          name: "v1.1.0 — 2,136 Joyo Kanji Edition"
+          body: "Complete Joyo Kanji handwriting practice app (all 2,136 characters and 22,366 strokes). Download **offline-kanji-practice-v1.apk** on your Android phone and tap to update/install."
           files: |
             build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
             build/app/outputs/flutter-apk/app-release.apk

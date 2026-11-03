@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
-CONTENT_DB_VERSION = 20260101
+CONTENT_DB_VERSION = 20261103
 NUM_SAMPLE_POINTS = 50
 CANVAS_BOX_SIZE = 109.0
 
@@ -495,6 +495,11 @@ def validate_database(db_path: Path) -> None:
     conn.close()
 
 def main():
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description="Build Offline Kanji Practice Content DB")
     parser.add_argument(
         "--raw-dir",
