@@ -54,19 +54,19 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.1
-          name: "v1.2.1 — Tsuzuri: Dark Mode, Custom Logo & Haptic Feedback"
+          tag_name: v1.2.2
+          name: "v1.2.2 — Tsuzuri: Hardware Haptics & Acoustic Feedback"
           body: |
-            ## Tsuzuri (綴り) v1.2.1 Update
+            ## Tsuzuri (綴り) v1.2.2 Update
 
             ### What's New:
-            - **Haptic Feedback**: Added `android.permission.VIBRATE` and multi-level haptics (stroke success, failure, short stroke, and kanji completion).
-            - **Dark Mode**: Automatic phone system theme detection with manual Light / Dark / System switch in Settings ⚙️.
-            - **Tsuzuri Rebranding**: Custom calligraphy emblem icon (Android launcher mipmaps & in-app AppBar headers).
-            - **All 2,136 Joyo Kanji**: Full offline database with 22,366 verified stroke paths and FSRS spaced repetition.
+            - **Hardware-Level Haptic Feedback**: Directly commands Android's hardware `Vibrator` motor so vibrations fire reliably even if global "touch feedback" is toggled off in Android settings.
+            - **Tactile Rhythm**: 1 crisp vibration pulse for correct strokes; 2 distinct vibration pulses for wrong strokes.
+            - **Subtle Acoustic Feedback**: System click sound on correct strokes and subtle alert sound on incorrect strokes.
+            - **Dark Mode & 2,136 Joyo Kanji**: Full offline handwriting practice with FSRS spaced repetition.
 
             ### Download:
-            Download **offline-kanji-practice-v1.apk** below and open it on your Android phone to install or update!
+            Download **offline-kanji-practice-v1.apk** below or tap the file directly in Telegram to install!
           files: |
             build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
             build/app/outputs/flutter-apk/app-release.apk
@@ -79,8 +79,8 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          RELEASE_TAG="v1.2.1"
-          MESSAGE=$(printf "🚀 <b>New Tsuzuri (綴り) Release: %s</b>\n\nA new Android build has been built and published!\n\n<b>Features:</b>\n• All 2,136 Joyo Kanji handwriting practice\n• Dark Mode (System default + manual switch)\n• Tsuzuri Calligraphy Logo & App Icon\n• Tactile haptic feedback for strokes\n\n📥 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/download/%s/offline-kanji-practice-v1.apk\">Direct APK Download</a>\n🌐 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/tag/%s\">GitHub Release Notes</a>" "${RELEASE_TAG}" "${RELEASE_TAG}" "${RELEASE_TAG}")
+          RELEASE_TAG="v1.2.2"
+          MESSAGE=$(printf "🚀 <b>New Tsuzuri (綴り) Release: %s</b>\n\nA new Android build has been built and published!\n\n<b>What's New:</b>\n• Hardware vibrator (1 pulse for right, 2 pulses for wrong)\n• Works without needing OS touch feedback enabled\n• Subtle acoustic feedback (click / alert)\n• All 2,136 Joyo Kanji + Dark Mode\n\n📥 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/download/%s/offline-kanji-practice-v1.apk\">Direct APK Download</a>\n🌐 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/tag/%s\">GitHub Release Notes</a>" "${RELEASE_TAG}" "${RELEASE_TAG}" "${RELEASE_TAG}")
 
           curl --fail-with-body --silent --show-error \
             --request POST \

@@ -1,8 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../matching/point2d.dart';
 import '../../matching/stroke_matcher.dart';
+import '../../services/feedback_service.dart';
 import 'svg_path_parser.dart';
 
 /// Callback fired when all strokes of the target kanji have been completed.
@@ -179,10 +178,7 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
     );
 
     if (matchResult.isPass) {
-      if (widget.hapticsEnabled) {
-        unawaited(HapticFeedback.lightImpact());
-        unawaited(HapticFeedback.selectionClick());
-      }
+      FeedbackService.notifySuccess(hapticsEnabled: widget.hapticsEnabled);
       _hintAnimController.stop();
       setState(() {
         _currentStrokeIndex++;
@@ -193,25 +189,18 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
       });
 
       if (_currentStrokeIndex >= widget.referenceStrokes.length) {
-        if (widget.hapticsEnabled) {
-          unawaited(HapticFeedback.mediumImpact());
-        }
+        FeedbackService.notifyCharacterCompleted(hapticsEnabled: widget.hapticsEnabled);
         _completionPulseController.forward(from: 0.0);
         widget.onCompleted(_mistakesOnCurrentKanji, _hintsUsedOnCurrentKanji);
       }
     } else if (matchResult.status == StrokeMatchStatus.tooShort) {
-      if (widget.hapticsEnabled) {
-        unawaited(HapticFeedback.selectionClick());
-      }
+      FeedbackService.notifyFailure(hapticsEnabled: widget.hapticsEnabled);
       setState(() {
         _feedbackBannerText = 'Too short — draw the full stroke';
         _feedbackBannerColor = const Color(0xFFEF6C00);
       });
     } else {
-      if (widget.hapticsEnabled) {
-        unawaited(HapticFeedback.heavyImpact());
-        unawaited(HapticFeedback.vibrate());
-      }
+      FeedbackService.notifyFailure(hapticsEnabled: widget.hapticsEnabled);
       _mistakesOnCurrentKanji++;
       _mistakesOnCurrentStroke++;
 
