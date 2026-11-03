@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models.dart';
 import '../../providers/app_providers.dart';
+import '../../scheduling/fsrs_scheduler.dart';
 import 'attributions_screen.dart';
 import 'practice_screen.dart';
 import 'settings_screen.dart';

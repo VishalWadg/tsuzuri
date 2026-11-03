@@ -37,6 +37,7 @@ jobs:
       - name: Generate Android runner & fetch packages
         run: |
           flutter create . --project-name offline_kanji_practice --platforms android
+          rm -f test/widget_test.dart
           flutter pub get
 
       - name: Run Flutter unit tests

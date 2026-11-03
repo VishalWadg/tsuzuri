@@ -35,10 +35,10 @@ class PracticeQueueItem {
 /// - Automatically maps `(mistakes, hintsUsed)` on character completion to `Again`, `Hard`, `Good`, or `Easy`.
 /// - Builds the daily review queue: due cards first, then new cards up to the daily limit.
 class FsrsSchedulerService {
-  final fsrs_pkg.FSRS _fsrs;
+  final fsrs_pkg.Scheduler _fsrs;
 
-  FsrsSchedulerService({fsrs_pkg.FSRS? fsrsInstance})
-      : _fsrs = fsrsInstance ?? fsrs_pkg.FSRS();
+  FsrsSchedulerService({fsrs_pkg.Scheduler? fsrsInstance})
+      : _fsrs = fsrsInstance ?? fsrs_pkg.Scheduler();
 
   /// Maps stroke mistakes and hints used to a [PracticeGrade] without requiring self-rating (Section 4).
   static PracticeGrade deriveGrade({
@@ -70,23 +70,27 @@ class FsrsSchedulerService {
     final grade = deriveGrade(mistakes: mistakes, hintsUsed: hintsUsed);
     final existing = userDb.getCard(codepoint, mode: mode);
 
-    final fsrsCard = existing != null ? _toFsrsCard(existing) : fsrs_pkg.Card();
+    final fsrsCard = existing != null ? _toFsrsCard(existing) : fsrs_pkg.Card(cardId: codepoint);
     final rating = _toFsrsRating(grade);
 
-    final schedulingCards = _fsrs.repeat(fsrsCard, reviewTime);
-    final updatedFsrsCard = schedulingCards[rating]!.card;
+    final result = _fsrs.reviewCard(fsrsCard, rating, reviewDateTime: reviewTime);
+    final updatedFsrsCard = result.card;
 
     final updatedProgress = UserCardProgress(
       codepoint: codepoint,
       mode: mode,
       dueDate: updatedFsrsCard.due.toUtc(),
-      stability: updatedFsrsCard.stability,
-      difficulty: updatedFsrsCard.difficulty,
-      elapsedDays: updatedFsrsCard.elapsedDays,
-      scheduledDays: updatedFsrsCard.scheduledDays,
-      reps: updatedFsrsCard.reps,
-      lapses: updatedFsrsCard.lapses,
-      state: updatedFsrsCard.state.index,
+      stability: updatedFsrsCard.stability ?? 0.0,
+      difficulty: updatedFsrsCard.difficulty ?? 0.0,
+      elapsedDays: existing != null && existing.lastReview != null
+          ? reviewTime.difference(existing.lastReview!).inDays
+          : 0,
+      scheduledDays: updatedFsrsCard.due.difference(reviewTime).inDays,
+      reps: (existing?.reps ?? 0) + 1,
+      lapses: (existing?.lapses ?? 0) + (grade == PracticeGrade.again ? 1 : 0),
+      state: updatedFsrsCard.state == fsrs_pkg.State.review
+          ? 2
+          : (updatedFsrsCard.state == fsrs_pkg.State.relearning ? 3 : 1),
       lastReview: reviewTime,
     );
 
@@ -143,19 +147,26 @@ class FsrsSchedulerService {
   }
 
   static fsrs_pkg.Card _toFsrsCard(UserCardProgress progress) {
-    final card = fsrs_pkg.Card()
-      ..due = progress.dueDate.toUtc()
-      ..stability = progress.stability
-      ..difficulty = progress.difficulty
-      ..elapsedDays = progress.elapsedDays
-      ..scheduledDays = progress.scheduledDays
-      ..reps = progress.reps
-      ..lapses = progress.lapses
-      ..state = fsrs_pkg.State.values[progress.state.clamp(0, fsrs_pkg.State.values.length - 1)];
-    if (progress.lastReview != null) {
-      card.lastReview = progress.lastReview!.toUtc();
+    fsrs_pkg.State state;
+    switch (progress.state) {
+      case 2:
+        state = fsrs_pkg.State.review;
+        break;
+      case 3:
+        state = fsrs_pkg.State.relearning;
+        break;
+      default:
+        state = fsrs_pkg.State.learning;
+        break;
     }
-    return card;
+    return fsrs_pkg.Card(
+      cardId: progress.codepoint,
+      due: progress.dueDate.toUtc(),
+      stability: progress.stability > 0 ? progress.stability : null,
+      difficulty: progress.difficulty > 0 ? progress.difficulty : null,
+      state: state,
+      lastReview: progress.lastReview?.toUtc(),
+    );
   }
 
   static fsrs_pkg.Rating _toFsrsRating(PracticeGrade grade) {
