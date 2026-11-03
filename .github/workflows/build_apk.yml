@@ -54,10 +54,10 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0
-          name: "v1.2.0 — Tsuzuri: Dark Mode, Custom Logo & Haptic Feedback"
+          tag_name: v1.2.1
+          name: "v1.2.1 — Tsuzuri: Dark Mode, Custom Logo & Haptic Feedback"
           body: |
-            ## Tsuzuri (綴り) v1.2.0 Update
+            ## Tsuzuri (綴り) v1.2.1 Update
 
             ### What's New:
             - **Haptic Feedback**: Added `android.permission.VIBRATE` and multi-level haptics (stroke success, failure, short stroke, and kanji completion).
@@ -72,3 +72,27 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send Telegram Release Notification
+        if: success()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          RELEASE_TAG="v1.2.1"
+          MESSAGE=$(printf "🚀 <b>New Tsuzuri (綴り) Release: %s</b>\n\nA new Android build has been built and published!\n\n<b>Features:</b>\n• All 2,136 Joyo Kanji handwriting practice\n• Dark Mode (System default + manual switch)\n• Tsuzuri Calligraphy Logo & App Icon\n• Tactile haptic feedback for strokes\n\n📥 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/download/%s/offline-kanji-practice-v1.apk\">Direct APK Download</a>\n🌐 <a href=\"https://github.com/VishalWadg/tsuzuri/releases/tag/%s\">GitHub Release Notes</a>" "${RELEASE_TAG}" "${RELEASE_TAG}" "${RELEASE_TAG}")
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=${MESSAGE}"
+
+          # Upload APK file directly to Telegram for immediate 1-tap installation
+          curl --silent --show-error \
+            --request POST \
+            "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${CHAT_ID}" \
+            -F "document=@build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk" \
+            -F "caption=📦 Tsuzuri ${RELEASE_TAG} APK (Tap to Install)" || true
