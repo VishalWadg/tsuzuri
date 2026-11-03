@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../data/models.dart';
 import '../../matching/stroke_matcher.dart';
 import '../../providers/app_providers.dart';
 
@@ -58,6 +59,34 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text(
+            'Appearance & Theme',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<AppThemeMode>(
+            segments: const [
+              ButtonSegment<AppThemeMode>(
+                value: AppThemeMode.system,
+                icon: Icon(Icons.brightness_auto),
+                label: Text('System'),
+              ),
+              ButtonSegment<AppThemeMode>(
+                value: AppThemeMode.light,
+                icon: Icon(Icons.light_mode),
+                label: Text('Light'),
+              ),
+              ButtonSegment<AppThemeMode>(
+                value: AppThemeMode.dark,
+                icon: Icon(Icons.dark_mode),
+                label: Text('Dark'),
+              ),
+            ],
+            selected: {settings.themeMode},
+            onSelectionChanged: (sel) => notifier.updateThemeMode(sel.first),
+          ),
+          const Divider(height: 32),
+
           Text(
             'Stroke Matching Leniency',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),

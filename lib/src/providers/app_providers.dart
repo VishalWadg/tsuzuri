@@ -44,6 +44,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     _userDb.saveSettings(state);
   }
 
+  void updateThemeMode(AppThemeMode mode) {
+    state = state.copyWith(themeMode: mode);
+    _userDb.saveSettings(state);
+  }
+
   void reloadFromDatabase() {
     state = _userDb.loadSettings();
   }

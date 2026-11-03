@@ -181,6 +181,7 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
     if (matchResult.isPass) {
       if (widget.hapticsEnabled) {
         unawaited(HapticFeedback.lightImpact());
+        unawaited(HapticFeedback.selectionClick());
       }
       _hintAnimController.stop();
       setState(() {
@@ -192,10 +193,16 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
       });
 
       if (_currentStrokeIndex >= widget.referenceStrokes.length) {
+        if (widget.hapticsEnabled) {
+          unawaited(HapticFeedback.mediumImpact());
+        }
         _completionPulseController.forward(from: 0.0);
         widget.onCompleted(_mistakesOnCurrentKanji, _hintsUsedOnCurrentKanji);
       }
     } else if (matchResult.status == StrokeMatchStatus.tooShort) {
+      if (widget.hapticsEnabled) {
+        unawaited(HapticFeedback.selectionClick());
+      }
       setState(() {
         _feedbackBannerText = 'Too short — draw the full stroke';
         _feedbackBannerColor = const Color(0xFFEF6C00);
@@ -203,6 +210,7 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
     } else {
       if (widget.hapticsEnabled) {
         unawaited(HapticFeedback.heavyImpact());
+        unawaited(HapticFeedback.vibrate());
       }
       _mistakesOnCurrentKanji++;
       _mistakesOnCurrentStroke++;
@@ -279,9 +287,11 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
                     _completionPulseController,
                   ]),
                   builder: (context, _) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
                     return CustomPaint(
                       size: size,
                       painter: _KanjiThreeLayerPainter(
+                        isDark: isDark,
                         referenceStrokes: widget.referenceStrokes,
                         completedStrokeCount: _currentStrokeIndex,
                         isCharacterCompleted: isCompleted,
@@ -333,6 +343,7 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
 }
 
 class _KanjiThreeLayerPainter extends CustomPainter {
+  final bool isDark;
   final List<ReferenceStroke> referenceStrokes;
   final int completedStrokeCount;
   final bool isCharacterCompleted;
@@ -343,6 +354,7 @@ class _KanjiThreeLayerPainter extends CustomPainter {
   final double failFadeProgress;
 
   _KanjiThreeLayerPainter({
+    required this.isDark,
     required this.referenceStrokes,
     required this.completedStrokeCount,
     required this.isCharacterCompleted,
@@ -358,9 +370,10 @@ class _KanjiThreeLayerPainter extends CustomPainter {
     final rect = Offset.zero & size;
 
     // 0. Background surface + Four-Quadrant Practice Grid
-    final bgPaint = Paint()..color = const Color(0xFFFDFBF7);
+    final bgPaint = Paint()
+      ..color = isDark ? const Color(0xFF1E2638) : const Color(0xFFFDFBF7);
     final borderPaint = Paint()
-      ..color = const Color(0xFF9E9D89)
+      ..color = isDark ? const Color(0xFF3B4863) : const Color(0xFF9E9D89)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawRRect(
@@ -377,8 +390,8 @@ class _KanjiThreeLayerPainter extends CustomPainter {
     // 1. Layer 1: Verified Strokes (snapped to KanjiVG paths; turns green on completion)
     final verifiedPaint = Paint()
       ..color = isCharacterCompleted
-          ? const Color(0xFF2E7D32)
-          : const Color(0xFF1F2937)
+          ? const Color(0xFF22C55E)
+          : (isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1F2937))
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.width * 0.048
       ..strokeCap = StrokeCap.round
@@ -399,7 +412,8 @@ class _KanjiThreeLayerPainter extends CustomPainter {
 
       if (showStaticHintOutline) {
         final hintOutlinePaint = Paint()
-          ..color = const Color(0xFF90A4AE).withValues(alpha: 0.45)
+          ..color = (isDark ? const Color(0xFF94A3B8) : const Color(0xFF90A4AE))
+              .withValues(alpha: 0.45)
           ..style = PaintingStyle.stroke
           ..strokeWidth = size.width * 0.045
           ..strokeCap = StrokeCap.round
@@ -409,7 +423,8 @@ class _KanjiThreeLayerPainter extends CustomPainter {
 
       if (hintAnimationProgress > 0.0) {
         final animPaint = Paint()
-          ..color = const Color(0xFF1565C0).withValues(alpha: 0.85)
+          ..color = (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1565C0))
+              .withValues(alpha: 0.85)
           ..style = PaintingStyle.stroke
           ..strokeWidth = size.width * 0.048
           ..strokeCap = StrokeCap.round
@@ -426,7 +441,7 @@ class _KanjiThreeLayerPainter extends CustomPainter {
     if (failedFlashPoints.length >= 2) {
       final alpha = (1.0 - failFadeProgress).clamp(0.0, 1.0);
       final failPaint = Paint()
-        ..color = const Color(0xFFD32F2F).withValues(alpha: alpha)
+        ..color = const Color(0xFFEF4444).withValues(alpha: alpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = size.width * 0.048
         ..strokeCap = StrokeCap.round
@@ -436,7 +451,7 @@ class _KanjiThreeLayerPainter extends CustomPainter {
 
     if (activePoints.length >= 2) {
       final livePaint = Paint()
-        ..color = const Color(0xFF0D47A1)
+        ..color = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0D47A1)
         ..style = PaintingStyle.stroke
         ..strokeWidth = size.width * 0.046
         ..strokeCap = StrokeCap.round
@@ -447,7 +462,7 @@ class _KanjiThreeLayerPainter extends CustomPainter {
 
   void _drawFourQuadrantGrid(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = const Color(0xFFD6D3C4)
+      ..color = isDark ? const Color(0xFF334155) : const Color(0xFFD6D3C4)
       ..strokeWidth = 1.2;
 
     const dashLen = 6.0;

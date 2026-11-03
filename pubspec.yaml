@@ -34,3 +34,4 @@ flutter:
   assets:
     - assets/db/kanji_content.db
     - assets/db/content_version.txt
+    - assets/images/logo.png

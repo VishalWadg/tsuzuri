@@ -10,8 +10,38 @@ class AttributionsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Data Attributions & Licenses')),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: const [
-          _AttributionCard(
+        children: [
+          Center(
+            child: Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'TSUZURI (綴り)',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Offline Japanese Kanji Handwriting Practice',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 18),
+              ],
+            ),
+          ),
+          const _AttributionCard(
             title: 'KanjiVG (Stroke Order & Vector Paths)',
             license: 'Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)',
             copyrightHolder: '© Ulrich Apel (http://kanjivg.tagaini.net)',
@@ -20,8 +50,8 @@ class AttributionsScreen extends StatelessWidget {
                 'and stroke type classifications used by the writing canvas and pre-sampled '
                 '50-point Fréchet stroke matcher.',
           ),
-          SizedBox(height: 12),
-          _AttributionCard(
+          const SizedBox(height: 12),
+          const _AttributionCard(
             title: 'KANJIDIC2 (Kanji Readings, Meanings & Metadata)',
             license: 'Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)',
             copyrightHolder:
@@ -31,8 +61,8 @@ class AttributionsScreen extends StatelessWidget {
                 'school grades, JLPT levels, frequency rankings, on\'yomi/kun\'yomi readings, '
                 'and English meanings.',
           ),
-          SizedBox(height: 12),
-          _AttributionCard(
+          const SizedBox(height: 12),
+          const _AttributionCard(
             title: 'FSRS (Free Spaced Repetition Scheduler)',
             license: 'MIT License',
             copyrightHolder: 'Open-Spaced-Repetition Contributors (pub.dev/packages/fsrs)',

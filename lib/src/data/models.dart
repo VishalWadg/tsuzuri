@@ -129,18 +129,30 @@ class UserCardProgress {
   }
 }
 
+/// Theme mode setting for the app.
+enum AppThemeMode {
+  system('System (Phone default)'),
+  light('Light'),
+  dark('Dark');
+
+  final String label;
+  const AppThemeMode(this.label);
+}
+
 /// User preferences stored in the writable User DB.
 class AppSettings {
   final LeniencyPreset leniency;
   final bool hintsEnabled;
   final bool hapticsEnabled;
   final int dailyNewCardsLimit;
+  final AppThemeMode themeMode;
 
   const AppSettings({
     this.leniency = LeniencyPreset.normal,
     this.hintsEnabled = true,
     this.hapticsEnabled = true,
     this.dailyNewCardsLimit = 10,
+    this.themeMode = AppThemeMode.system,
   });
 
   AppSettings copyWith({
@@ -148,12 +160,14 @@ class AppSettings {
     bool? hintsEnabled,
     bool? hapticsEnabled,
     int? dailyNewCardsLimit,
+    AppThemeMode? themeMode,
   }) {
     return AppSettings(
       leniency: leniency ?? this.leniency,
       hintsEnabled: hintsEnabled ?? this.hintsEnabled,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       dailyNewCardsLimit: dailyNewCardsLimit ?? this.dailyNewCardsLimit,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 }

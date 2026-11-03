@@ -24,7 +24,38 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Offline Kanji Practice (v1)'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/images/logo.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'TSUZURI',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+                fontSize: 19,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '綴り',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Settings & Backup',

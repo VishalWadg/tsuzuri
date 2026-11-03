@@ -221,11 +221,18 @@ class UserDatabase {
       orElse: () => LeniencyPreset.normal,
     );
 
+    final themeModeName = map['theme_mode'] ?? AppThemeMode.system.name;
+    final themeMode = AppThemeMode.values.firstWhere(
+      (e) => e.name == themeModeName,
+      orElse: () => AppThemeMode.system,
+    );
+
     return AppSettings(
       leniency: leniency,
       hintsEnabled: (map['hints_enabled'] ?? 'true') == 'true',
       hapticsEnabled: (map['haptics_enabled'] ?? 'true') == 'true',
       dailyNewCardsLimit: int.tryParse(map['daily_new_limit'] ?? '10') ?? 10,
+      themeMode: themeMode,
     );
   }
 
@@ -235,6 +242,7 @@ class UserDatabase {
       'hints_enabled': settings.hintsEnabled.toString(),
       'haptics_enabled': settings.hapticsEnabled.toString(),
       'daily_new_limit': settings.dailyNewCardsLimit.toString(),
+      'theme_mode': settings.themeMode.name,
     };
     final stmt = _db.prepare('''
       INSERT INTO user_settings (key, value) VALUES (?, ?)

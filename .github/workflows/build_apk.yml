@@ -54,9 +54,19 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: "v1.1.0 — 2,136 Joyo Kanji Edition"
-          body: "Complete Joyo Kanji handwriting practice app (all 2,136 characters and 22,366 strokes). Download **offline-kanji-practice-v1.apk** on your Android phone and tap to update/install."
+          tag_name: v1.2.0
+          name: "v1.2.0 — Tsuzuri: Dark Mode, Custom Logo & Haptic Feedback"
+          body: |
+            ## Tsuzuri (綴り) v1.2.0 Update
+
+            ### What's New:
+            - **Haptic Feedback**: Added `android.permission.VIBRATE` and multi-level haptics (stroke success, failure, short stroke, and kanji completion).
+            - **Dark Mode**: Automatic phone system theme detection with manual Light / Dark / System switch in Settings ⚙️.
+            - **Tsuzuri Rebranding**: Custom calligraphy emblem icon (Android launcher mipmaps & in-app AppBar headers).
+            - **All 2,136 Joyo Kanji**: Full offline database with 22,366 verified stroke paths and FSRS spaced repetition.
+
+            ### Download:
+            Download **offline-kanji-practice-v1.apk** below and open it on your Android phone to install or update!
           files: |
             build/app/outputs/flutter-apk/offline-kanji-practice-v1.apk
             build/app/outputs/flutter-apk/app-release.apk
