@@ -131,5 +131,85 @@ class ContentDatabase {
     return rows.map((r) => r['codepoint'] as int).toList(growable: false);
   }
 
+  /// Generates plausible distractor English meanings for [target], prioritizing same grade / JLPT level.
+  List<String> generateMeaningDistractors(KanjiCharacter target, {int count = 3}) {
+    final all = getAllKanjiOrdered();
+    final targetMeaningsLower = target.meanings.map((m) => m.toLowerCase().trim()).toSet();
+
+    // Prioritize candidates with same grade or JLPT level
+    final peers = all
+        .where((k) =>
+            k.codepoint != target.codepoint &&
+            (k.grade == target.grade || k.jlptLevel == target.jlptLevel))
+        .toList();
+
+    final pool = peers.length >= count
+        ? peers
+        : all.where((k) => k.codepoint != target.codepoint).toList();
+
+    final distractors = <String>[];
+    for (final candidate in pool) {
+      for (final m in candidate.meanings) {
+        final clean = m.trim();
+        if (clean.isNotEmpty &&
+            !targetMeaningsLower.contains(clean.toLowerCase()) &&
+            !distractors.contains(clean)) {
+          distractors.add(clean);
+          break;
+        }
+      }
+      if (distractors.length >= count) break;
+    }
+    return distractors;
+  }
+
+  /// Generates plausible distractor readings (on'yomi or kun'yomi) for [target].
+  List<String> generateReadingDistractors(KanjiCharacter target, {int count = 3}) {
+    final all = getAllKanjiOrdered();
+    final targetReadings =
+        {...target.onyomi, ...target.kunyomi}.map((r) => r.trim()).toSet();
+
+    final peers = all
+        .where((k) =>
+            k.codepoint != target.codepoint &&
+            (k.grade == target.grade || k.jlptLevel == target.jlptLevel))
+        .toList();
+
+    final pool = peers.length >= count
+        ? peers
+        : all.where((k) => k.codepoint != target.codepoint).toList();
+
+    final distractors = <String>[];
+    for (final candidate in pool) {
+      final candidateReadings = [...candidate.onyomi, ...candidate.kunyomi];
+      for (final r in candidateReadings) {
+        final clean = r.trim();
+        if (clean.isNotEmpty &&
+            !targetReadings.contains(clean) &&
+            !distractors.contains(clean)) {
+          distractors.add(clean);
+          break;
+        }
+      }
+      if (distractors.length >= count) break;
+    }
+    return distractors;
+  }
+
+  /// Generates plausible distractor Kanji characters for [target].
+  List<String> generateKanjiDistractors(KanjiCharacter target, {int count = 3}) {
+    final all = getAllKanjiOrdered();
+    final pool = all.where((k) => k.codepoint != target.codepoint).toList();
+
+    final distractors = <String>[];
+    for (final candidate in pool) {
+      if (!distractors.contains(candidate.literal)) {
+        distractors.add(candidate.literal);
+      }
+      if (distractors.length >= count) break;
+    }
+    return distractors;
+  }
+
   void close() => _db.dispose();
 }

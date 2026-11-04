@@ -136,6 +136,36 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(height: 32),
 
           Text(
+            'Japanese Audio & Speech (TTS)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<AudioSpeed>(
+            segments: const [
+              ButtonSegment<AudioSpeed>(
+                value: AudioSpeed.normal,
+                icon: Icon(Icons.speed),
+                label: Text('Normal (0.5x)'),
+              ),
+              ButtonSegment<AudioSpeed>(
+                value: AudioSpeed.slow,
+                icon: Icon(Icons.slow_motion_video),
+                label: Text('Slow (0.32x)'),
+              ),
+            ],
+            selected: {settings.audioSpeed},
+            onSelectionChanged: (sel) => notifier.updateAudioSpeed(sel.first),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            title: const Text('Audio Autoplay'),
+            subtitle: const Text('Automatically speak Japanese prompt when an audio exercise appears'),
+            value: settings.audioAutoplay,
+            onChanged: notifier.toggleAudioAutoplay,
+          ),
+          const Divider(height: 32),
+
+          Text(
             'Offline Backup & Restore (Fix #11)',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),

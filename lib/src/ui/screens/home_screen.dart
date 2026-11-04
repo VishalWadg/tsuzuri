@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models.dart';
 import '../../providers/app_providers.dart';
-import '../../scheduling/fsrs_scheduler.dart';
+import '../../services/exercise_engine.dart';
+import '../widgets/preset_selector_widget.dart';
 import 'attributions_screen.dart';
 import 'practice_screen.dart';
 import 'settings_screen.dart';
@@ -16,11 +17,18 @@ class HomeScreen extends ConsumerWidget {
     final contentDb = ref.watch(contentDatabaseProvider);
     final userDb = ref.watch(userDatabaseProvider);
     final queue = ref.watch(dailyQueueProvider);
+    final activePreset = ref.watch(activePresetProvider);
 
     final dueCount = userDb.getDueCards(now: DateTime.now()).length;
     final studiedCount = userDb.getStudiedCodepoints().length;
     final totalKanji = contentDb.totalKanjiCount;
     final allKanji = contentDb.getAllKanjiOrdered();
+
+    final sessionExercises = ExerciseEngine.createSessionQueue(
+      characters: queue.map((q) => q.kanji).toList(),
+      config: activePreset.configuration,
+      contentDb: contentDb,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -118,7 +126,9 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+                  const PresetSelectorWidget(),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -127,7 +137,9 @@ class HomeScreen extends ConsumerWidget {
                           : () {
                               Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) => PracticeScreen(queue: queue),
+                                  builder: (_) => PracticeScreen(
+                                    exercises: sessionExercises,
+                                  ),
                                 ),
                               );
                             },
@@ -135,7 +147,7 @@ class HomeScreen extends ConsumerWidget {
                       label: Text(
                         queue.isEmpty
                             ? 'All Caught Up for Today!'
-                            : 'Start Practice Session (${queue.length} Kanji)',
+                            : 'Start ${activePreset.name} (${sessionExercises.length} Kanji)',
                       ),
                     ),
                   ),
@@ -170,15 +182,16 @@ class HomeScreen extends ConsumerWidget {
                 kanji: kanji,
                 progress: card,
                 onTap: () {
+                  final activeConfig = ref.read(activeConfigurationProvider);
+                  final exercise = ExerciseEngine.createExercise(
+                    kanji: kanji,
+                    config: activeConfig,
+                    contentDb: contentDb,
+                  );
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => PracticeScreen(
-                        queue: [
-                          PracticeQueueItem(
-                            kanji: kanji,
-                            existingProgress: card,
-                          ),
-                        ],
+                        exercises: [exercise],
                       ),
                     ),
                   );

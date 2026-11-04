@@ -13,7 +13,7 @@ import 'models.dart';
 /// - Includes schema versioning (`currentSchemaVersion = 2`) with tested migrations.
 /// - Supports full JSON snapshot and raw SQLite file backup & restore.
 class UserDatabase {
-  static const int currentSchemaVersion = 2;
+  static const int currentSchemaVersion = 3;
   final Database _db;
   final String? filePath;
 
@@ -87,6 +87,26 @@ class UserDatabase {
           ON review_logs(codepoint, mode);
       ''');
       _db.execute('PRAGMA user_version = 2;');
+    }
+
+    if (version < 3) {
+      // Schema v3 migration: adds writing_metrics table for non-SRS diagnostic telemetry
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS writing_metrics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          codepoint INTEGER NOT NULL,
+          exercise_type TEXT NOT NULL,
+          shape_score REAL NOT NULL,
+          order_errors INTEGER NOT NULL,
+          retries INTEGER NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          recorded_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_writing_metrics_codepoint
+          ON writing_metrics(codepoint);
+      ''');
+      _db.execute('PRAGMA user_version = 3;');
     }
   }
 
@@ -205,6 +225,40 @@ class UserDatabase {
     );
   }
 
+  void insertWritingMetric({
+    required int codepoint,
+    required String exerciseType,
+    required double shapeScore,
+    required int orderErrors,
+    required int retries,
+    required int durationMs,
+    required DateTime recordedAt,
+  }) {
+    _db.execute(
+      '''
+      INSERT INTO writing_metrics (
+        codepoint, exercise_type, shape_score, order_errors, retries, duration_ms, recorded_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ''',
+      [
+        codepoint,
+        exerciseType,
+        shapeScore,
+        orderErrors,
+        retries,
+        durationMs,
+        recordedAt.toUtc().toIso8601String(),
+      ],
+    );
+  }
+
+  List<Map<String, Object?>> getWritingMetrics(int codepoint) {
+    return _db.select(
+      'SELECT * FROM writing_metrics WHERE codepoint = ? ORDER BY id DESC',
+      [codepoint],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // User Settings CRUD
   // ---------------------------------------------------------------------------
@@ -227,12 +281,20 @@ class UserDatabase {
       orElse: () => AppThemeMode.system,
     );
 
+    final audioSpeedName = map['audio_speed'] ?? AudioSpeed.normal.name;
+    final audioSpeed = AudioSpeed.values.firstWhere(
+      (e) => e.name == audioSpeedName,
+      orElse: () => AudioSpeed.normal,
+    );
+
     return AppSettings(
       leniency: leniency,
       hintsEnabled: (map['hints_enabled'] ?? 'true') == 'true',
       hapticsEnabled: (map['haptics_enabled'] ?? 'true') == 'true',
       dailyNewCardsLimit: int.tryParse(map['daily_new_limit'] ?? '10') ?? 10,
       themeMode: themeMode,
+      audioSpeed: audioSpeed,
+      audioAutoplay: (map['audio_autoplay'] ?? 'true') == 'true',
     );
   }
 
@@ -243,6 +305,8 @@ class UserDatabase {
       'haptics_enabled': settings.hapticsEnabled.toString(),
       'daily_new_limit': settings.dailyNewCardsLimit.toString(),
       'theme_mode': settings.themeMode.name,
+      'audio_speed': settings.audioSpeed.name,
+      'audio_autoplay': settings.audioAutoplay.toString(),
     };
     final stmt = _db.prepare('''
       INSERT INTO user_settings (key, value) VALUES (?, ?)
@@ -258,6 +322,28 @@ class UserDatabase {
   }
 
   // ---------------------------------------------------------------------------
+  // Active Practice Preset CRUD
+  // ---------------------------------------------------------------------------
+
+  String loadActivePresetId() {
+    final rows = _db.select("SELECT value FROM user_settings WHERE key = 'active_preset_id'");
+    if (rows.isEmpty) return 'standard';
+    return rows.first['value'] as String;
+  }
+
+  void saveActivePresetId(String presetId) {
+    final stmt = _db.prepare('''
+      INSERT INTO user_settings (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    ''');
+    try {
+      stmt.execute(['active_preset_id', presetId]);
+    } finally {
+      stmt.dispose();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Backup & Restore (Fix #11: survives app reinstall & schema migrations)
   // ---------------------------------------------------------------------------
 
@@ -265,6 +351,7 @@ class UserDatabase {
     final cards = _db.select('SELECT * FROM srs_cards ORDER BY codepoint, mode');
     final logs = _db.select('SELECT * FROM review_logs ORDER BY id ASC');
     final settings = _db.select('SELECT * FROM user_settings ORDER BY key ASC');
+    final metrics = _db.select('SELECT * FROM writing_metrics ORDER BY id ASC');
 
     final payload = {
       'schema_version': schemaVersion,
@@ -272,6 +359,7 @@ class UserDatabase {
       'srs_cards': cards,
       'review_logs': logs,
       'user_settings': settings,
+      'writing_metrics': metrics,
     };
     return const JsonEncoder.withIndent('  ').convert(payload);
   }
@@ -281,12 +369,14 @@ class UserDatabase {
     final cards = (decoded['srs_cards'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final logs = (decoded['review_logs'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final settings = (decoded['user_settings'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final metrics = (decoded['writing_metrics'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
     _db.execute('BEGIN TRANSACTION;');
     try {
       _db.execute('DELETE FROM srs_cards;');
       _db.execute('DELETE FROM review_logs;');
       _db.execute('DELETE FROM user_settings;');
+      _db.execute('DELETE FROM writing_metrics;');
 
       for (final c in cards) {
         upsertCard(UserCardProgress.fromMap(c));
@@ -305,6 +395,17 @@ class UserDatabase {
         _db.execute(
           'INSERT INTO user_settings (key, value) VALUES (?, ?)',
           [s['key'] as String, s['value'] as String],
+        );
+      }
+      for (final m in metrics) {
+        insertWritingMetric(
+          codepoint: m['codepoint'] as int,
+          exerciseType: m['exercise_type'] as String,
+          shapeScore: (m['shape_score'] as num).toDouble(),
+          orderErrors: m['order_errors'] as int,
+          retries: m['retries'] as int,
+          durationMs: m['duration_ms'] as int,
+          recordedAt: DateTime.parse(m['recorded_at'] as String),
         );
       }
       _db.execute('COMMIT;');

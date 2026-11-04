@@ -17,6 +17,8 @@ class KanjiWritingCanvas extends StatefulWidget {
   final bool hintsEnabled;
   final bool hapticsEnabled;
   final KanjiCompletedCallback onCompleted;
+  final bool showFullReference;
+  final bool guidedMode;
 
   const KanjiWritingCanvas({
     super.key,
@@ -25,6 +27,8 @@ class KanjiWritingCanvas extends StatefulWidget {
     required this.hintsEnabled,
     required this.hapticsEnabled,
     required this.onCompleted,
+    this.showFullReference = false,
+    this.guidedMode = false,
   });
 
   @override
@@ -291,6 +295,8 @@ class KanjiWritingCanvasState extends State<KanjiWritingCanvas>
                         activePoints: _activePoints,
                         failedFlashPoints: _failedFlashPoints,
                         failFadeProgress: _failFadeController.value,
+                        showFullReference: widget.showFullReference,
+                        guidedMode: widget.guidedMode,
                       ),
                     );
                   },
@@ -341,6 +347,8 @@ class _KanjiThreeLayerPainter extends CustomPainter {
   final List<Offset> activePoints;
   final List<Offset> failedFlashPoints;
   final double failFadeProgress;
+  final bool showFullReference;
+  final bool guidedMode;
 
   _KanjiThreeLayerPainter({
     required this.isDark,
@@ -352,6 +360,8 @@ class _KanjiThreeLayerPainter extends CustomPainter {
     required this.activePoints,
     required this.failedFlashPoints,
     required this.failFadeProgress,
+    required this.showFullReference,
+    required this.guidedMode,
   });
 
   @override
@@ -376,6 +386,22 @@ class _KanjiThreeLayerPainter extends CustomPainter {
 
     _drawFourQuadrantGrid(canvas, size);
 
+    // 0b. Layer 0b: Full Reference Watermark for Copy Practice
+    if (showFullReference) {
+      final watermarkPaint = Paint()
+        ..color = (isDark ? const Color(0xFF94A3B8) : const Color(0xFF90A4AE))
+            .withValues(alpha: 0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.045
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      for (final stroke in referenceStrokes) {
+        final path = KanjiSvgPathParser.parseToCanvasPath(stroke.svgPath, size);
+        canvas.drawPath(path, watermarkPaint);
+      }
+    }
+
     // 1. Layer 1: Verified Strokes (snapped to KanjiVG paths; turns green on completion)
     final verifiedPaint = Paint()
       ..color = isCharacterCompleted
@@ -394,15 +420,17 @@ class _KanjiThreeLayerPainter extends CustomPainter {
       canvas.drawPath(path, verifiedPaint);
     }
 
-    // 2. Layer 2: Hint Layer (faint outline + animated demonstration of next stroke)
+    // 2. Layer 2: Hint / Guided Layer (faint outline + animated demonstration of next stroke)
     if (!isCharacterCompleted && completedStrokeCount < referenceStrokes.length) {
       final nextStroke = referenceStrokes[completedStrokeCount];
       final nextPath = KanjiSvgPathParser.parseToCanvasPath(nextStroke.svgPath, size);
 
-      if (showStaticHintOutline) {
+      if (showStaticHintOutline || guidedMode) {
         final hintOutlinePaint = Paint()
-          ..color = (isDark ? const Color(0xFF94A3B8) : const Color(0xFF90A4AE))
-              .withValues(alpha: 0.45)
+          ..color = (guidedMode
+                  ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1976D2))
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF90A4AE)))
+              .withValues(alpha: guidedMode ? 0.55 : 0.45)
           ..style = PaintingStyle.stroke
           ..strokeWidth = size.width * 0.045
           ..strokeCap = StrokeCap.round

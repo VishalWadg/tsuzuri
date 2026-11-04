@@ -139,6 +139,16 @@ enum AppThemeMode {
   const AppThemeMode(this.label);
 }
 
+/// Audio playback speed preset for spoken Japanese prompts.
+enum AudioSpeed {
+  normal('Normal', 0.5),
+  slow('Slow', 0.32);
+
+  final String label;
+  final double rate;
+  const AudioSpeed(this.label, this.rate);
+}
+
 /// User preferences stored in the writable User DB.
 class AppSettings {
   final LeniencyPreset leniency;
@@ -146,6 +156,8 @@ class AppSettings {
   final bool hapticsEnabled;
   final int dailyNewCardsLimit;
   final AppThemeMode themeMode;
+  final AudioSpeed audioSpeed;
+  final bool audioAutoplay;
 
   const AppSettings({
     this.leniency = LeniencyPreset.normal,
@@ -153,6 +165,8 @@ class AppSettings {
     this.hapticsEnabled = true,
     this.dailyNewCardsLimit = 10,
     this.themeMode = AppThemeMode.system,
+    this.audioSpeed = AudioSpeed.normal,
+    this.audioAutoplay = true,
   });
 
   AppSettings copyWith({
@@ -161,6 +175,8 @@ class AppSettings {
     bool? hapticsEnabled,
     int? dailyNewCardsLimit,
     AppThemeMode? themeMode,
+    AudioSpeed? audioSpeed,
+    bool? audioAutoplay,
   }) {
     return AppSettings(
       leniency: leniency ?? this.leniency,
@@ -168,6 +184,8 @@ class AppSettings {
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       dailyNewCardsLimit: dailyNewCardsLimit ?? this.dailyNewCardsLimit,
       themeMode: themeMode ?? this.themeMode,
+      audioSpeed: audioSpeed ?? this.audioSpeed,
+      audioAutoplay: audioAutoplay ?? this.audioAutoplay,
     );
   }
 }
