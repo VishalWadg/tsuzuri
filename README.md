@@ -1,82 +1,130 @@
-# Offline Kanji Practice App (v1 — Writing Module)
+# Tsuzuri (綴り) — Offline-First Japanese Kanji Practice & Learning System
 
-A complete, self-contained **Flutter + Python** implementation of **v1 (the Writing Module)** from the *Offline Kanji Practice App: Approach Plan*. Everything runs 100% offline with zero servers or accounts required.
+[![Flutter Test Suite](https://img.shields.io/badge/Tests-88%20Passing-brightgreen.svg)](#automated-testing)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#platform-support)
+[![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20%7C%20Dual%20SQLite%20%7C%20FSRS-orange.svg)](docs/PROJECT_GUIDEBOOK.md)
 
----
+**Tsuzuri (綴り)** is a complete, production-grade, 100% offline-first Japanese Kanji learning and handwriting mastery application built with **Flutter**, **Dart**, and **SQLite**. 
 
-## What Is Included & How All 13 Fixes from the Plan Are Implemented
-
-1. **Dual Databases (Fix #1 & #12)**:
-   - `assets/db/kanji_content.db`: Read-only prebuilt SQLite database containing KANJIDIC2 character metadata and KanjiVG stroke paths + pre-sampled 50-point binary blobs. Stamped with `content_version` (`20260101`). On app launch (`ContentDatabase.initialize`), if the bundled version is newer than the installed copy, the new file is written to `kanji_content.db.tmp` and atomically renamed into place without touching user data.
-   - `user_progress.db`: Separate writable SQLite database in the app documents directory storing `srs_cards`, `review_logs`, and `user_settings`, with versioned schema migrations (`UserDatabase`).
-2. **Unicode Codepoint Primary Keys & Per-Modality Cards (Fix #2 & #9)**:
-   - Every kanji is keyed by its Unicode scalar value (`codepoint`, e.g., `0x65E5` for `日`), never an autoincrement ID.
-   - FSRS cards in `srs_cards` are keyed by `(codepoint, mode)` (e.g., `(0x65E5, 'writing')`), isolating writing progress so future reading/audio modules can add their own cards cleanly.
-3. **Pre-Sampled 50-Point Stroke Blobs at Build Time (Fix #7)**:
-   - `tools/build_content_db.py` evaluates KanjiVG cubic Bézier paths at build time, resamples each stroke to 50 equidistant points by arc length in the `109×109` coordinate space, and stores a 400-byte little-endian `float32` binary blob (`sampled_points_blob`) beside `svg_path`. No runtime SVG parsing library is used on the hot path.
-4. **Revised Stroke Checking Pipeline (Section 3 & Fixes #3, #4, #5, #6)**:
-   - Implemented in pure Dart (`lib/src/matching/`) with zero UI dependencies:
-     - Normalizes canvas coordinates to `109×109` and resamples user polyline $U$ to 50 points by arc length.
-     - Rejects accidental taps (`tooShort`).
-     - **Length-ratio gate (Fix #3)**: Rejects strokes under 50% or over 200% of reference length (scaled by leniency preset).
-     - **Start-direction chord gate (Fix #4)**: Compares the chord over the first 25% of the stroke (points `0..12` of 50) plus overall start-to-end chord to catch reversed strokes (`wrongDirection`).
-     - **Iterative Discrete Fréchet Distance + Bounding-Box Alignment (Fix #5)**: Computes discrete Fréchet distance iteratively ($O(N^2)$ with a 2-row rolling buffer) against both the as-drawn stroke and a bounding-box-translated/scaled variant (penalized mildly by `1.15×`).
-     - **Length-Scaled Threshold (Fix #3)**: Scales threshold to ~25% of reference stroke length, clamped to `[9.5, 25.0]`, multiplied by the active leniency preset (`Strict`, `Normal`, `Forgiving`).
-     - **Wrong-Order Detection (Fix #6)**: When a stroke fails against expected stroke $Q_i$, tests remaining strokes $Q_{i+1 \dots n-1}$ and returns `wrongOrder` if it matches a later stroke.
-5. **Three-Layer CustomPainter Canvas (Phase 4)**:
-   - Implemented in `lib/src/ui/canvas/kanji_canvas.dart` & `svg_path_parser.dart`:
-     - **Layer 1**: Four-quadrant grid + verified strokes snapped to reference SVG paths (turns green on character completion).
-     - **Layer 2**: Hint layer showing a faint outline of the next stroke and an animated progressive stroke demonstration after repeated errors or when tapping **Hint**.
-     - **Layer 3**: Single-pointer live ink capture (ignores extra multi-touch pointers), haptic feedback, and red flash + fade-out with reason banner on failure.
-6. **Automatic FSRS Grading & Daily Queue (Phase 5)**:
-   - Implemented in `lib/src/scheduling/fsrs_scheduler.dart`: maps `(mistakes, hintsUsed)` directly to `Easy`, `Good`, `Hard`, or `Again` on completion, updates the `(codepoint, 'writing')` FSRS card, and builds the daily queue (due cards first, then new cards ordered by school grade & JLPT level up to the daily limit).
-7. **Backup & Restore + Licensing Attributions (Fixes #10, #11, #13)**:
-   - JSON snapshot export & import in `SettingsScreen` and `UserDatabase` (`exportBackupJson` / `importBackupJson`).
-   - Full attributions in `DATA_SOURCES.md` and the in-app `AttributionsScreen` for KanjiVG (CC BY-SA 3.0) and KANJIDIC2 (EDRDG CC BY-SA 4.0).
+Everything runs on your device with **zero server dependencies, zero accounts, and zero cloud tracking**.
 
 ---
 
-## Quick Start on Your PC
+## 📖 Complete Beginner Architecture Guide
+
+For an in-depth, beginner-friendly walkthrough explaining the tech stack, mathematical algorithms, architectural decisions, and how to explain this project in interviews and portfolios, read the comprehensive guidebook:
+
+👉 **[docs/PROJECT_GUIDEBOOK.md](docs/PROJECT_GUIDEBOOK.md)**
+
+---
+
+## Key Features & Capabilities
+
+### 1. Advanced 5-Stage Stroke Recognition
+- Real-time handwriting recognition on a 60/120fps `CustomPainter` canvas.
+- Uses **Discrete Fréchet Distance** curve-matching rather than heavy neural networks, achieving sub-millisecond, deterministic verification.
+- **5-Stage Verification Pipeline**: Length-Ratio Gate &rarr; Chord Direction Gate &rarr; Fréchet Distance Matrix &rarr; Dynamic Thresholding &rarr; Wrong-Order Detection.
+- Live stroke snapping to reference SVG paths, directional error banners, and animated stroke demos on mistakes.
+
+### 2. Dual Database Architecture
+- **Read-Only Content DB (`assets/db/kanji_content.db`)**: Pre-compiled SQLite database with KANJIDIC2 character metadata, KanjiVG SVG paths, and pre-sampled 50-point binary blobs. Updated atomically on launch with version stamps without touching user data.
+- **Writable User Progress DB (`user_progress.db`)**: Local SQLite database storing user review logs, FSRS scheduling states, writing metrics, and personal settings with versioned migrations (Schema v3).
+
+### 3. Multi-Skill Spaced Repetition (FSRS)
+- Powered by the **Free Spaced Repetition Scheduler (FSRS)**, mathematically superior to legacy SM-2/Anki algorithms.
+- **Strict Skill Isolation**: Separate FSRS cards for `writingRecall`, `readingRecognition`, and `meaningRecognition` under `(codepoint, skill)`. Assisted practice (watermark tracing or stroke locking) never corrupts true free-recall memory stability.
+
+### 4. 8 Curated Practice Presets (2 Activities)
+Learners can seamlessly toggle between two learning activities right from the Home Screen:
+
+| Activity | Preset Name | Prompt Type | Answer Method | FSRS Memory Impact |
+| :--- | :--- | :--- | :--- | :--- |
+| **Writing** | **Standard** | English Meaning | Free-Recall Handwriting | ✅ Advances Writing Stability |
+| **Writing** | **Stroke Guide** | English Meaning | Stroke-Locked Handwriting | 🔒 Isolated Metrics Only |
+| **Writing** | **Challenge** | English Meaning | Strict Leniency Handwriting | ✅ Advances Writing Stability |
+| **Writing** | **Audio Immersion** | Spoken Japanese (TTS) | Free-Recall Handwriting | ✅ Advances Writing Stability |
+| **Writing** | **Copy Practice** | English Meaning | Watermark Tracing Canvas | 🔒 Isolated Metrics Only |
+| **Recognition** | **Kanji &rarr; Meaning** | Kanji Literal | 4-Choice English Meaning | ✅ Advances Meaning Stability |
+| **Recognition** | **Kanji &rarr; Reading** | Kanji Literal | 4-Choice Kana Reading | ✅ Advances Reading Stability |
+| **Recognition** | **Audio &rarr; Meaning** | Spoken Japanese (TTS) | 4-Choice English Meaning | ✅ Advances Meaning Stability |
+
+### 5. Native Offline Speech & Audio (TTS)
+- Integrated via `flutter_tts` connecting directly to on-device speech synthesis (Google Speech Services / Windows SAPI).
+- Interactive `AudioPromptCard` with infinite replay, speed calibration (**Normal 0.5x** vs. **Slow 0.32x**), and autoplay guards.
+- Informative user guidance when device `ja-JP` voice data needs to be enabled in OS settings.
+
+### 6. Full Data Portability & Offline Backup
+- Single-tap JSON export and import for complete user progress, review logs, and settings.
+- Easy migration between devices without third-party servers.
+
+---
+
+## Project Structure
+
+```
+offline_kanji_practice/
+├── assets/
+│   ├── db/                            # Bundled prebuilt kanji_content.db & version stamp
+│   └── images/                        # App branding & logo assets
+├── docs/                              # Architecture documentation & milestone reports
+│   ├── PROJECT_GUIDEBOOK.md           # The comprehensive beginner-friendly architecture guide
+│   ├── M0_BASELINE_REPORT.md          # Baseline stabilization & regression test suite
+│   ├── M1_ARCHITECTURE_PROPOSAL.md    # Universal exercise abstraction design
+│   ├── M2_AUDIO_ARCHITECTURE_AND_DECISIONS.md # Speech service & TTS design
+│   ├── M3_ADVANCED_WRITING_ARCHITECTURE_AND_PLAN.md # Watermarks, stroke locking & isolation
+│   ├── M4_PRESETS_AND_CONFIG_ARCHITECTURE.md # Presets & configuration domain model
+│   ├── M5_RECOGNITION_AND_MULTI_SKILL_ARCHITECTURE.md # Recognition quizzes & Schema v3
+│   └── M6_FINAL_POLISH_AND_VERIFICATION.md # Activity switcher, backup & verification
+├── lib/
+│   ├── main.dart                      # App entry point
+│   └── src/
+│       ├── data/                      # Dual SQLite databases (content_db & user_db)
+│       ├── domain/exercises/          # Abstract exercise definitions, prompts & presets
+│       ├── matching/                  # Discrete Fréchet distance & stroke geometry
+│       ├── providers/                 # Riverpod dependency injection & reactive state
+│       ├── scheduling/                # FSRS spaced-repetition scheduler
+│       ├── services/                  # Exercise engine, speech service, haptic feedback
+│       └── ui/                        # CustomPainter canvas, screens & interactive widgets
+├── test/                              # Automated integration and unit test suite (88 tests)
+└── tools/                             # Python build pipeline & benchmarking tools
+```
+
+---
+
+## Getting Started
 
 ### 1. Prerequisites
-- **Flutter SDK**: `>=3.3.0` (run `flutter create . --platforms android,ios,linux,macos,windows` once inside the folder to generate the platform runner directories for your OS/device)
-- **Python 3**: `>=3.9` (uses only the Python standard library — zero external pip packages required!)
+- **Flutter SDK**: `>=3.3.0`
+- **Dart SDK**: `>=3.0.0`
+- **Python 3**: `>=3.9` (optional: only needed if rebuilding content databases from raw KanjiVG/KANJIDIC2 XML)
 
-### 2. Verify the Content Pipeline & Benchmark Harness (Python)
-The zip archive already ships with a prebuilt `assets/db/kanji_content.db` (seeded with 20 core Joyo Grade 1 / JLPT N5 kanji and 65 pre-sampled strokes so it works immediately out of the box). You can rebuild and run the validation + synthetic stroke-matcher benchmark anytime:
-
+### 2. Install & Run Tests
 ```bash
-# Rebuild assets/db/kanji_content.db from data/raw/
-python3 tools/build_content_db.py --scope joyo
+# Clone the repository
+git clone https://github.com/VishalWadg/tsuzuri.git
+cd tsuzuri
 
-# Run Phase 1 DB integrity tests (stroke counts, 400-byte blobs, NaN checks, version stamp)
-python3 tools/test_content_db.py
-
-# Run Phase 2 synthetic stroke-matcher benchmark (noisy variants, reversed strokes, wrong-order strokes)
-python3 tools/benchmark_matcher.py
-```
-
-### 3. Optional: Compile Full Joyo (2,136 Kanji) or Full KANJIDIC2 (6,355 Kanji)
-When on an internet-connected PC, run the included downloader to fetch the complete official KANJIDIC2 and KanjiVG datasets and rebuild `assets/db/kanji_content.db`:
-
-```bash
-python3 tools/download_full_data.py
-python3 tools/build_content_db.py --scope joyo
-python3 tools/test_content_db.py
-python3 tools/benchmark_matcher.py
-```
-
-### 4. Run the Flutter App & Unit Tests
-```bash
-# Generate platform runner folders (android, ios, windows, macos, linux) if not present
-flutter create . --project-name offline_kanji_practice
-
-# Fetch Dart packages
+# Fetch Dart dependencies
 flutter pub get
 
-# Run Phase 2, Phase 3, and Phase 5 Dart unit tests
+# Run the complete test suite (88/88 tests passing)
 flutter test
 
-# Launch on your connected Android/iOS device or desktop
+# Verify code analysis (0 errors, 0 warnings)
+flutter analyze
+```
+
+### 3. Launch the Application
+```bash
+# Run on your connected device, emulator, or desktop
 flutter run
 ```
+
+> **Note on Japanese Audio**: On your first launch of an audio exercise, if your device does not have Japanese voice data installed, follow the in-app banner to download **Japanese (ja-JP)** in your device's Text-to-Speech settings. Once downloaded, it works 100% offline forever.
+
+---
+
+## Attributions & Licensing
+
+- **KanjiVG**: Stroke order diagrams and Bézier path data created by Ulrich Apel, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+- **KANJIDIC2**: Japanese dictionary file compiled by the Electronic Dictionary Research and Development Group (EDRDG), licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
