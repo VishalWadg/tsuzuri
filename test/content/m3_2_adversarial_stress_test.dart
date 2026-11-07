@@ -461,6 +461,7 @@ void main() {
     });
 
     test('1.13 Oversized Payload exceeding maxPackageSizeBytes: halts download and rejects', () async {
+      // Subcase 1: Chunked transfer encoding without Content-Length
       mockHttpServer.serveManifest('/manifest.json', {
         'id': 'huge_pkg',
         'name': 'Huge Pkg',
@@ -483,7 +484,36 @@ void main() {
       expect(result.errorCode, IngestionErrorCode.networkError);
       expect(result.errorMessage, contains('exceeded maximum allowed limit'));
 
-      final stagingSubdirs = Directory(p.join(tempRootDir.path, '.staging')).listSync();
+      var stagingSubdirs = Directory(p.join(tempRootDir.path, '.staging')).listSync();
+      expect(stagingSubdirs, isEmpty);
+
+      // Subcase 2: Declared Content-Length exceeding maxPackageSizeBytes
+      mockHttpServer.serveManifest('/manifest_cl.json', {
+        'id': 'huge_cl_pkg',
+        'name': 'Huge CL Pkg',
+        'version': '1.0.0',
+        'capabilities': ['metadata'],
+        'archiveUrl': '/huge_cl.zip',
+      });
+      mockHttpServer.onGet('/huge_cl.zip', (req, res) {
+        res.statusCode = HttpStatus.ok;
+        res.headers.set(HttpHeaders.contentLengthHeader, '50000');
+        res.add(Uint8List(50000));
+      });
+
+      final resultCl = await onlineFetcher.fetchAndInstall(
+        Uri.parse('${mockHttpServer.baseUrl}/manifest_cl.json'),
+        options: const FetchOptions(
+          maxPackageSizeBytes: 4 * 1024, // 4 KB limit
+          maxRetries: 0,
+        ),
+      );
+
+      expect(resultCl.isSuccess, isFalse);
+      expect(resultCl.errorCode, IngestionErrorCode.networkError);
+      expect(resultCl.errorMessage, contains('exceeded maximum allowed limit'));
+
+      stagingSubdirs = Directory(p.join(tempRootDir.path, '.staging')).listSync();
       expect(stagingSubdirs, isEmpty);
     });
   });

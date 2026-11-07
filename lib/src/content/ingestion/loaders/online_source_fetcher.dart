@@ -245,6 +245,17 @@ class OnlineSourceFetcher {
         final response = await request.close().timeout(options.receiveTimeout);
         final statusCode = response.statusCode;
 
+        // Check Content-Length header early if provided
+        if (response.contentLength >= 0 && response.contentLength > options.maxPackageSizeBytes) {
+          final subscription = response.listen((_) {}, onError: (_) {}, cancelOnError: true);
+          try {
+            await subscription.cancel();
+          } catch (_) {}
+          throw SecurityException(
+            'Response payload exceeded maximum allowed limit of ${options.maxPackageSizeBytes} bytes.',
+          );
+        }
+
         // Collect body bytes with size limit guard
         final bytesBuilder = BytesBuilder(copy: false);
         var totalBytes = 0;
@@ -252,8 +263,9 @@ class OnlineSourceFetcher {
         await for (final chunk in response.timeout(options.receiveTimeout)) {
           totalBytes += chunk.length;
           if (totalBytes > options.maxPackageSizeBytes) {
-            await response.detachSocket();
-            throw SecurityException('Response payload exceeded maximum allowed limit of ${options.maxPackageSizeBytes} bytes.');
+            throw SecurityException(
+              'Response payload exceeded maximum allowed limit of ${options.maxPackageSizeBytes} bytes.',
+            );
           }
           bytesBuilder.add(chunk);
         }
