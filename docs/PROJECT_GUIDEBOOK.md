@@ -139,6 +139,15 @@ flowchart LR
 - **Decision**: Introduce an Activity Segmented Control (`Writing` vs `Recognition`), global TTS speed and autoplay switches, full JSON backup/restore for all v3 metrics, and author a comprehensive verification test suite.
 - **Why**: Unifies all modes into a cohesive production-ready interface with 100% automated test coverage (88/88 tests passing).
 
+### Beyond Milestone 6: Plug-and-Play Modular Content Source System (Anki-Style Modularity)
+- **Decision**: Decouple the monolithic content database into three orthogonal contracts (`IKanjiMetadataSource`, `IKanjiStrokeSource`, and `IKanjiAudioSource`), managed by a priority-based `ContentSourceRegistry` and unified `ContentRepository` facade.
+- **Why**: 
+  - Learners can now bring their own Kanji datasets, custom stroke styles, and pre-recorded audio packs without modifying source code.
+  - Supports both **Offline ZIP Packages** and **Online Remote HTTP Sources** with automatic local disk caching.
+  - **Graceful Fallback**: If a custom source only provides 10 JLPT N1 characters or lacks audio, the system automatically falls back to bundled defaults for everything else.
+  - **FSRS Progress Invariance**: All user learning cards in `user_progress.db` remain permanently keyed by standard Unicode codepoints (`codepoint`). Adding, updating, or deactivating a custom source never corrupts or deletes user study history.
+  - **Security & Integrity**: Integrated `ZipSlipGuard` prevents path traversal attacks, while `SourceValidator` checks SHA-256 hashes and JSON/SQLite integrity before mounting packages.
+
 ---
 
 ## Chapter 4: Algorithmic Deep Dives (Matching & Scheduling)
@@ -206,11 +215,17 @@ lib/
     │   ├── exercise_result.dart       # Verification result & FSRS rating
     │   ├── exercise_types.dart        # Enums (SkillType, ExerciseActivity, etc.)
     │   └── practice_configuration.dart# Presets & custom session configs
-    ├── matching/                      # Pure Dart stroke-matching algorithms
-    │   ├── frechet.dart               # Discrete Fréchet distance engine
-    │   ├── point2d.dart               # 2D vector geometry & arc-length resampling
-    │   └── stroke_matcher.dart        # 5-stage verification & leniency gates
-    ├── providers/                     # Riverpod state management
+213.     ├── matching/                      # Pure Dart stroke-matching algorithms
+214.     │   ├── frechet.dart               # Discrete Fréchet distance engine
+215.     │   ├── point2d.dart               # 2D vector geometry & arc-length resampling
+216.     │   └── stroke_matcher.dart        # 5-stage verification & leniency gates
+217.     ├── content/                       # Plug-and-play modular source architecture
+218.     │   ├── contracts/                 # IKanjiMetadataSource, IKanjiStrokeSource, IKanjiAudioSource
+219.     │   ├── registry/                  # ContentSourceRegistry & ContentRepository facade
+220.     │   ├── sources/                   # Bundled defaults & Custom source adapters
+221.     │   ├── ingestion/                 # Manifest parser, ZipSlipGuard, Offline & Online loaders
+222.     │   └── providers/                 # Riverpod bindings for dynamic sources
+223.     ├── providers/                     # Riverpod state management
     │   └── app_providers.dart         # Database, active preset, & queue providers
     ├── scheduling/                    # Spaced repetition logic
     │   └── fsrs_scheduler.dart        # FSRS algorithm implementation
@@ -286,5 +301,7 @@ If you are discussing Tsuzuri in a portfolio review, engineering interview, or p
    - Explain why memory stability for writing recall must be isolated from recognition quizzes, preventing assisted modes (like watermark tracing) from corrupting spaced-repetition intervals.
 4. **Universal Exercise Abstraction**:
    - Discuss how decomposing exercises into sealed `ExercisePrompt` and `ExerciseAnswerMethod` hierarchies made it simple to expand from a single writing canvas to 8 distinct practice presets across writing, reading, and audio.
-5. **Production Verification & Testing Rigor**:
-   - Emphasize the automated testing suite: 88 integration and unit tests covering regression locks, FSRS calculations, audio speed toggling, and multi-skill database migrations.
+5. **Plug-and-Play Modular Source Architecture**:
+   - Explain how you decoupled character metadata, stroke points, and audio into orthogonal interfaces (`IKanjiMetadataSource`, `IKanjiStrokeSource`, `IKanjiAudioSource`), with a priority registry and fallback facade that allows users to import custom offline ZIP packages or stream online content without corrupting FSRS learning history.
+6. **Production Verification & Testing Rigor**:
+   - Emphasize the automated testing suite: **382 integration, unit, adversarial, and E2E tests** covering regression locks, FSRS calculations, audio speed toggling, zip-slip security guards, and multi-skill database migrations.

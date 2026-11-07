@@ -10,3 +10,4 @@ __pycache__/
 *.iml
 .metadata
 data/raw/
+.agents/

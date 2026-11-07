@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../content/providers/content_source_providers.dart';
+import '../content/registry/content_repository.dart';
+import '../content/registry/content_source_registry.dart';
 import '../data/content_db.dart';
 import '../data/models.dart';
 import '../data/user_db.dart';
@@ -84,18 +87,85 @@ final japaneseVoiceAvailableProvider = FutureProvider<bool>((ref) async {
 /// Bump counter to refresh queue & home stats whenever a session or backup restore finishes.
 final progressRefreshTriggerProvider = StateProvider<int>((ref) => 0);
 
-/// Provides the current daily review + new-card queue.
-final dailyQueueProvider = Provider<List<PracticeQueueItem>>((ref) {
+/// Tracks registry mutations to reactively invalidate dependent Riverpod providers.
+final contentSourceRegistryVersionProvider = StateProvider<int>((ref) {
+  ContentSourceRegistry? registry;
+  try {
+    registry = ref.watch(contentSourceRegistryProvider);
+  } catch (_) {}
+
+  if (registry != null) {
+    void listener() {
+      try {
+        ref.controller.state++;
+      } catch (_) {}
+    }
+
+    registry.addListener(listener);
+    ref.onDispose(() => registry?.removeListener(listener));
+  }
+  return 0;
+});
+
+/// Canonical asynchronous daily queue provider resolving both bundled defaults
+/// and pure-async custom sources via [buildDailyQueueAsync].
+final dailyQueueAsyncProvider =
+    FutureProvider<List<PracticeQueueItem>>((ref) async {
   ref.watch(progressRefreshTriggerProvider);
+  ref.watch(contentSourceRegistryVersionProvider);
   final settings = ref.watch(settingsProvider);
-  final contentDb = ref.watch(contentDatabaseProvider);
   final userDb = ref.watch(userDatabaseProvider);
   final scheduler = ref.watch(fsrsSchedulerProvider);
 
+  ContentRepository? repository;
+  try {
+    repository = ref.watch(contentRepositoryProvider);
+  } catch (_) {}
+
+  if (repository != null) {
+    return scheduler.buildDailyQueueAsync(
+      repository: repository,
+      userDb: userDb,
+      dailyNewLimit: settings.dailyNewCardsLimit,
+    );
+  }
+
+  final contentDb = ref.watch(contentDatabaseProvider);
   return scheduler.buildDailyQueue(
     contentDb: contentDb,
     userDb: userDb,
     dailyNewLimit: settings.dailyNewCardsLimit,
+  );
+});
+
+/// Provides the current daily review + new-card queue.
+/// Consumes [dailyQueueAsyncProvider] with a synchronous fast-path fallback.
+final dailyQueueProvider = Provider<List<PracticeQueueItem>>((ref) {
+  final asyncQueue = ref.watch(dailyQueueAsyncProvider);
+  return asyncQueue.maybeWhen(
+    data: (queue) => queue,
+    orElse: () {
+      final settings = ref.watch(settingsProvider);
+      final userDb = ref.watch(userDatabaseProvider);
+      final scheduler = ref.watch(fsrsSchedulerProvider);
+
+      ContentRepository? repository;
+      try {
+        repository = ref.watch(contentRepositoryProvider);
+      } catch (_) {
+        // Graceful fallback for legacy test harnesses
+      }
+
+      final contentDb = repository?.bundledContentDatabase ??
+          (repository == null ? ref.watch(contentDatabaseProvider) : null);
+
+      return scheduler.buildDailyQueue(
+        contentDb: contentDb,
+        repository: repository,
+        userDb: userDb,
+        dailyNewLimit: settings.dailyNewCardsLimit,
+      );
+    },
   );
 });
 

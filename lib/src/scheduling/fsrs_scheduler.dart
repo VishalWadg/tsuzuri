@@ -1,4 +1,5 @@
 import 'package:fsrs/fsrs.dart' as fsrs_pkg;
+import '../content/registry/content_repository.dart';
 import '../data/content_db.dart';
 import '../data/models.dart';
 import '../data/user_db.dart';
@@ -109,20 +110,81 @@ class FsrsSchedulerService {
 
   /// Builds the daily queue: due cards first (ordered by `due_date ASC`),
   /// followed by unstudied kanji ordered by school grade / JLPT level up to [dailyNewLimit].
+  ///
+  /// Supports resolving kanji through either [repository] or legacy [contentDb].
+  /// If a due card references a codepoint absent from active sources, it is safely omitted
+  /// from the queue without mutating [userDb].
   List<PracticeQueueItem> buildDailyQueue({
-    required ContentDatabase contentDb,
+    ContentDatabase? contentDb,
+    ContentRepository? repository,
     required UserDatabase userDb,
     required int dailyNewLimit,
     String mode = PracticeMode.writing,
     DateTime? now,
   }) {
+    assert(
+      contentDb != null || repository != null,
+      'Either contentDb or repository must be provided to buildDailyQueue',
+    );
+    final currentTime = (now ?? DateTime.now()).toUtc();
+    final queue = <PracticeQueueItem>[];
+
+    KanjiCharacter? resolveKanji(int codepoint) {
+      if (repository != null) {
+        final syncResult = repository.getKanjiByCodepointSync(codepoint);
+        if (syncResult != null) return syncResult;
+      }
+      return contentDb?.getKanjiByCodepoint(codepoint);
+    }
+
+    // 1. Due cards first
+    final dueCards = userDb.getDueCards(now: currentTime, mode: mode);
+    for (final card in dueCards) {
+      final kanji = resolveKanji(card.codepoint);
+      if (kanji != null) {
+        queue.add(PracticeQueueItem(kanji: kanji, existingProgress: card));
+      }
+      // If kanji == null: SAFELY OMITTED FROM QUEUE.
+      // 1. NO exception is thrown.
+      // 2. NO SQL DELETE or UPDATE is executed on user_progress.db.
+      // 3. User learning history (reps, stability, difficulty) is preserved intact.
+    }
+
+    // 2. New cards up to remaining daily allowance
+    final studiedSet = userDb.getStudiedCodepoints(mode: mode);
+    final orderedCodepoints = repository != null
+        ? repository.getOrderedCodepointsSync()
+        : (contentDb?.getOrderedCodepoints() ?? const []);
+    var addedNew = 0;
+
+    for (final cp in orderedCodepoints) {
+      if (addedNew >= dailyNewLimit) break;
+      if (studiedSet.contains(cp)) continue;
+      final kanji = resolveKanji(cp);
+      if (kanji != null) {
+        queue.add(PracticeQueueItem(kanji: kanji, existingProgress: null));
+        addedNew++;
+      }
+    }
+
+    return queue;
+  }
+
+  /// Asynchronous companion for building the daily queue from an asynchronous [ContentRepository].
+  Future<List<PracticeQueueItem>> buildDailyQueueAsync({
+    required ContentRepository repository,
+    required UserDatabase userDb,
+    required int dailyNewLimit,
+    String mode = PracticeMode.writing,
+    DateTime? now,
+  }) async {
     final currentTime = (now ?? DateTime.now()).toUtc();
     final queue = <PracticeQueueItem>[];
 
     // 1. Due cards first
     final dueCards = userDb.getDueCards(now: currentTime, mode: mode);
     for (final card in dueCards) {
-      final kanji = contentDb.getKanjiByCodepoint(card.codepoint);
+      final kanji = await repository.getKanjiByCodepoint(card.codepoint);
       if (kanji != null) {
         queue.add(PracticeQueueItem(kanji: kanji, existingProgress: card));
       }
@@ -130,13 +192,13 @@ class FsrsSchedulerService {
 
     // 2. New cards up to remaining daily allowance
     final studiedSet = userDb.getStudiedCodepoints(mode: mode);
-    final orderedCodepoints = contentDb.getOrderedCodepoints();
+    final orderedCodepoints = await repository.getOrderedCodepoints();
     var addedNew = 0;
 
     for (final cp in orderedCodepoints) {
       if (addedNew >= dailyNewLimit) break;
       if (studiedSet.contains(cp)) continue;
-      final kanji = contentDb.getKanjiByCodepoint(cp);
+      final kanji = await repository.getKanjiByCodepoint(cp);
       if (kanji != null) {
         queue.add(PracticeQueueItem(kanji: kanji, existingProgress: null));
         addedNew++;

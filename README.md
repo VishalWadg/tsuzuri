@@ -1,6 +1,6 @@
 # Tsuzuri (綴り) — Offline-First Japanese Kanji Practice & Learning System
 
-[![Flutter Test Suite](https://img.shields.io/badge/Tests-88%20Passing-brightgreen.svg)](#automated-testing)
+[![Flutter Test Suite](https://img.shields.io/badge/Tests-382%20Passing-brightgreen.svg)](#automated-testing)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#platform-support)
 [![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20%7C%20Dual%20SQLite%20%7C%20FSRS-orange.svg)](docs/PROJECT_GUIDEBOOK.md)
 
@@ -57,6 +57,13 @@ Learners can seamlessly toggle between two learning activities right from the Ho
 - Single-tap JSON export and import for complete user progress, review logs, and settings.
 - Easy migration between devices without third-party servers.
 
+### 7. Plug-and-Play Modular Source System (Anki-Style Modularity)
+- Decouples character metadata, stroke points, and audio into orthogonal interfaces (`IKanjiMetadataSource`, `IKanjiStrokeSource`, `IKanjiAudioSource`).
+- **Bring Your Own Data**: Import custom offline ZIP/directory packages or stream from remote HTTP sources.
+- **Automatic Fallback to Bundled Defaults**: Partial packages (e.g. adding JLPT N1 characters or custom audio) fall back transparently to bundled SQLite content for any missing entry.
+- **FSRS Progress Invariance**: Study progress is strictly keyed by Unicode codepoints (`codepoint`); adding, updating, or removing custom sources never alters or corrupts historical learning stability.
+- **Enterprise-Grade Validation & Security**: Hardened with `ZipSlipGuard` to stop path traversal attacks and `SourceValidator` for SHA-256 integrity and schema checks.
+
 ---
 
 ## Project Structure
@@ -79,13 +86,21 @@ offline_kanji_practice/
 │   ├── main.dart                      # App entry point
 │   └── src/
 │       ├── data/                      # Dual SQLite databases (content_db & user_db)
+│       ├── content/                   # Modular plug-and-play content source architecture
+│       │   ├── contracts/             # IKanjiMetadataSource, IKanjiStrokeSource, IKanjiAudioSource
+│       │   ├── registry/              # ContentSourceRegistry & ContentRepository facade
+│       │   ├── sources/               # Bundled defaults & custom source adapters
+│       │   ├── ingestion/             # Manifest parser, ZipSlipGuard, Offline & Online loaders
+│       │   └── providers/             # Riverpod dependency injection for dynamic sources
 │       ├── domain/exercises/          # Abstract exercise definitions, prompts & presets
 │       ├── matching/                  # Discrete Fréchet distance & stroke geometry
 │       ├── providers/                 # Riverpod dependency injection & reactive state
 │       ├── scheduling/                # FSRS spaced-repetition scheduler
 │       ├── services/                  # Exercise engine, speech service, haptic feedback
 │       └── ui/                        # CustomPainter canvas, screens & interactive widgets
-├── test/                              # Automated integration and unit test suite (88 tests)
+├── test/                              # Automated integration and unit test suite (382 tests)
+│   ├── content/                       # Modular source, ingestion, security & E2E tests
+│   └── ...                            # Regression, audio, handwriting & FSRS tests
 └── tools/                             # Python build pipeline & benchmarking tools
 ```
 
@@ -107,7 +122,7 @@ cd tsuzuri
 # Fetch Dart dependencies
 flutter pub get
 
-# Run the complete test suite (88/88 tests passing)
+# Run the complete test suite (382/382 tests passing)
 flutter test
 
 # Verify code analysis (0 errors, 0 warnings)
