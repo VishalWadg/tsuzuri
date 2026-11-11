@@ -1,3 +1,5 @@
+import '../../content/contracts/kanji_audio_source.dart';
+
 /// Helper for pure-Dart list equality without Flutter foundation dependency.
 bool _listEquals<T>(List<T>? a, List<T>? b) {
   if (identical(a, b)) return true;
@@ -95,6 +97,7 @@ final class AudioPrompt extends ExercisePrompt {
   final String spokenText;
   final List<String> hiddenMeanings;
   final int strokeCount;
+  final AudioPronunciation? audioPronunciation;
 
   AudioPrompt({
     required super.codepoint,
@@ -102,6 +105,7 @@ final class AudioPrompt extends ExercisePrompt {
     required this.spokenText,
     required List<String> hiddenMeanings,
     required this.strokeCount,
+    this.audioPronunciation,
   }) : hiddenMeanings = List<String>.unmodifiable(hiddenMeanings) {
     if (!isValidUnicodeScalar(codepoint)) {
       throw ArgumentError.value(
@@ -130,7 +134,8 @@ final class AudioPrompt extends ExercisePrompt {
           literal == other.literal &&
           spokenText == other.spokenText &&
           _listEquals(hiddenMeanings, other.hiddenMeanings) &&
-          strokeCount == other.strokeCount;
+          strokeCount == other.strokeCount &&
+          audioPronunciation == other.audioPronunciation;
 
   @override
   int get hashCode => Object.hash(
@@ -139,6 +144,7 @@ final class AudioPrompt extends ExercisePrompt {
         spokenText,
         Object.hashAll(hiddenMeanings),
         strokeCount,
+        audioPronunciation,
       );
 }
 

@@ -8,6 +8,7 @@ import '../data/user_db.dart';
 import '../domain/exercises/practice_configuration.dart';
 import '../matching/stroke_matcher.dart';
 import '../scheduling/fsrs_scheduler.dart';
+import '../services/audio_playback_service.dart';
 import '../services/speech_service.dart';
 
 /// Injected at startup in `main.dart` after initializing ContentDatabase and UserDatabase.
@@ -25,6 +26,12 @@ final fsrsSchedulerProvider = Provider<FsrsSchedulerService>((ref) {
 
 final speechServiceProvider = Provider<ISpeechService>((ref) {
   return SpeechService();
+});
+
+final audioPlaybackServiceProvider = Provider<IAudioPlaybackService>((ref) {
+  final service = AudioplayersPlaybackService();
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 /// Reactive notifier for user settings (`leniency`, `hints`, `haptics`, `dailyNewCardsLimit`).

@@ -189,3 +189,105 @@ class AppSettings {
     );
   }
 }
+
+/// Origin type of an installed custom content source package.
+enum SourceOriginType {
+  offlineArchive('offline_archive', 'Offline Archive (.zip)'),
+  offlineDir('offline_dir', 'Offline Folder'),
+  offlineJson('offline_json', 'Offline JSON'),
+  onlineUrl('online_url', 'Online URL');
+
+  final String dbKey;
+  final String label;
+  const SourceOriginType(this.dbKey, this.label);
+
+  static SourceOriginType fromDbKey(String value) {
+    return SourceOriginType.values.firstWhere(
+      (e) => e.dbKey == value,
+      orElse: () => SourceOriginType.offlineArchive,
+    );
+  }
+}
+
+/// Persistent registration record for an installed custom content source in `user_progress.db`.
+class InstalledSourceRecord {
+  final String sourceId;
+  final String name;
+  final String version;
+  final SourceOriginType originType;
+  final String? originUri;
+  final String packageDir;
+  final List<String> capabilities;
+  final int priority;
+  final bool enabled;
+  final DateTime installedAt;
+
+  const InstalledSourceRecord({
+    required this.sourceId,
+    required this.name,
+    required this.version,
+    required this.originType,
+    this.originUri,
+    required this.packageDir,
+    required this.capabilities,
+    required this.priority,
+    required this.enabled,
+    required this.installedAt,
+  });
+
+  InstalledSourceRecord copyWith({
+    String? sourceId,
+    String? name,
+    String? version,
+    SourceOriginType? originType,
+    String? originUri,
+    String? packageDir,
+    List<String>? capabilities,
+    int? priority,
+    bool? enabled,
+    DateTime? installedAt,
+  }) {
+    return InstalledSourceRecord(
+      sourceId: sourceId ?? this.sourceId,
+      name: name ?? this.name,
+      version: version ?? this.version,
+      originType: originType ?? this.originType,
+      originUri: originUri ?? this.originUri,
+      packageDir: packageDir ?? this.packageDir,
+      capabilities: capabilities ?? this.capabilities,
+      priority: priority ?? this.priority,
+      enabled: enabled ?? this.enabled,
+      installedAt: installedAt ?? this.installedAt,
+    );
+  }
+
+  Map<String, Object?> toMap() => {
+        'source_id': sourceId,
+        'name': name,
+        'version': version,
+        'origin_type': originType.dbKey,
+        'origin_uri': originUri,
+        'package_dir': packageDir,
+        'capabilities_json': jsonEncode(capabilities),
+        'priority': priority,
+        'enabled': enabled ? 1 : 0,
+        'installed_at': installedAt.toUtc().toIso8601String(),
+      };
+
+  factory InstalledSourceRecord.fromMap(Map<String, Object?> map) {
+    final rawCaps = map['capabilities_json'] as String? ?? '[]';
+    final caps = (jsonDecode(rawCaps) as List<dynamic>).map((e) => e.toString()).toList();
+    return InstalledSourceRecord(
+      sourceId: map['source_id'] as String,
+      name: map['name'] as String,
+      version: map['version'] as String,
+      originType: SourceOriginType.fromDbKey(map['origin_type'] as String? ?? 'offline_archive'),
+      originUri: map['origin_uri'] as String?,
+      packageDir: map['package_dir'] as String,
+      capabilities: List.unmodifiable(caps),
+      priority: (map['priority'] as num).toInt(),
+      enabled: (map['enabled'] as num).toInt() != 0,
+      installedAt: DateTime.parse(map['installed_at'] as String).toUtc(),
+    );
+  }
+}

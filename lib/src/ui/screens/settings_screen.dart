@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../content/providers/content_source_providers.dart';
 import '../../data/models.dart';
 import '../../matching/stroke_matcher.dart';
 import '../../providers/app_providers.dart';
+import 'content_sources_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -39,6 +41,7 @@ class SettingsScreen extends ConsumerWidget {
     final userDb = ref.read(userDatabaseProvider);
     userDb.importBackupJson(content);
 
+    await ref.read(contentSourceManagerProvider).hydrateOnStartup();
     ref.read(settingsProvider.notifier).reloadFromDatabase();
     ref.read(progressRefreshTriggerProvider.notifier).state++;
 
@@ -53,12 +56,43 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final installedSources = ref.watch(installedSourcesProvider);
+    final activeCustomCount = installedSources.where((s) => s.enabled).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings & Backup')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text(
+            'Content Sources & Custom Packs',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            key: const Key('settings_content_sources_tile'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6),
+              ),
+            ),
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Content Sources & Decks'),
+            subtitle: Text(
+              activeCustomCount == 0
+                  ? 'Using bundled defaults (Import .zip or connect URL)'
+                  : '$activeCustomCount custom source${activeCustomCount == 1 ? '' : 's'} active',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const ContentSourcesScreen()),
+              );
+            },
+          ),
+          const Divider(height: 32),
+
           Text(
             'Appearance & Theme',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),

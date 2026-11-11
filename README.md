@@ -1,6 +1,6 @@
 # Tsuzuri (綴り) — Offline-First Japanese Kanji Practice & Learning System
 
-[![Flutter Test Suite](https://img.shields.io/badge/Tests-382%20Passing-brightgreen.svg)](#automated-testing)
+[![Flutter Test Suite](https://img.shields.io/badge/Tests-391%20Passing-brightgreen.svg)](#automated-testing)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#platform-support)
 [![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20%7C%20Dual%20SQLite%20%7C%20FSRS-orange.svg)](docs/PROJECT_GUIDEBOOK.md)
 
@@ -81,25 +81,27 @@ offline_kanji_practice/
 │   ├── M3_ADVANCED_WRITING_ARCHITECTURE_AND_PLAN.md # Watermarks, stroke locking & isolation
 │   ├── M4_PRESETS_AND_CONFIG_ARCHITECTURE.md # Presets & configuration domain model
 │   ├── M5_RECOGNITION_AND_MULTI_SKILL_ARCHITECTURE.md # Recognition quizzes & Schema v3
-│   └── M6_FINAL_POLISH_AND_VERIFICATION.md # Activity switcher, backup & verification
+│   ├── M6_FINAL_POLISH_AND_VERIFICATION.md # Activity switcher, backup & verification
+│   └── M7_MODULAR_SOURCES_UI_AND_PERSISTENCE.md # Sources UI, Schema v4 persistence & media audio
 ├── lib/
-│   ├── main.dart                      # App entry point
+│   ├── main.dart                      # App entry point & startup custom source hydration
 │   └── src/
-│       ├── data/                      # Dual SQLite databases (content_db & user_db)
+│       ├── data/                      # Dual SQLite databases (content_db & user_db Schema v4)
 │       ├── content/                   # Modular plug-and-play content source architecture
 │       │   ├── contracts/             # IKanjiMetadataSource, IKanjiStrokeSource, IKanjiAudioSource
 │       │   ├── registry/              # ContentSourceRegistry & ContentRepository facade
 │       │   ├── sources/               # Bundled defaults & custom source adapters
 │       │   ├── ingestion/             # Manifest parser, ZipSlipGuard, Offline & Online loaders
+│       │   ├── services/              # ContentSourceManager (persistence, hydration, priority)
 │       │   └── providers/             # Riverpod dependency injection for dynamic sources
 │       ├── domain/exercises/          # Abstract exercise definitions, prompts & presets
 │       ├── matching/                  # Discrete Fréchet distance & stroke geometry
 │       ├── providers/                 # Riverpod dependency injection & reactive state
 │       ├── scheduling/                # FSRS spaced-repetition scheduler
-│       ├── services/                  # Exercise engine, speech service, haptic feedback
-│       └── ui/                        # CustomPainter canvas, screens & interactive widgets
-├── test/                              # Automated integration and unit test suite (382 tests)
-│   ├── content/                       # Modular source, ingestion, security & E2E tests
+│       ├── services/                  # Exercise engine, TTS & audio file playback, haptic feedback
+│       └── ui/                        # CustomPainter canvas, screens (inc. ContentSourcesScreen) & widgets
+├── test/                              # Automated integration and unit test suite (391 tests)
+│   ├── content/                       # Modular source, UI, persistence, security & E2E tests
 │   └── ...                            # Regression, audio, handwriting & FSRS tests
 └── tools/                             # Python build pipeline & benchmarking tools
 ```
@@ -122,7 +124,7 @@ cd tsuzuri
 # Fetch Dart dependencies
 flutter pub get
 
-# Run the complete test suite (382/382 tests passing)
+# Run the complete test suite (391/391 tests passing)
 flutter test
 
 # Verify code analysis (0 errors, 0 warnings)

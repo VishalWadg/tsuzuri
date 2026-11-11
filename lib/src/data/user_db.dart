@@ -13,7 +13,7 @@ import 'models.dart';
 /// - Includes schema versioning (`currentSchemaVersion = 2`) with tested migrations.
 /// - Supports full JSON snapshot and raw SQLite file backup & restore.
 class UserDatabase {
-  static const int currentSchemaVersion = 3;
+  static const int currentSchemaVersion = 4;
   final Database _db;
   final String? filePath;
 
@@ -107,6 +107,28 @@ class UserDatabase {
           ON writing_metrics(codepoint);
       ''');
       _db.execute('PRAGMA user_version = 3;');
+    }
+
+    if (version < 4) {
+      // Schema v4 migration: adds installed_sources table to persist modular content packs across launches
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS installed_sources (
+          source_id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          origin_type TEXT NOT NULL,
+          origin_uri TEXT,
+          package_dir TEXT NOT NULL,
+          capabilities_json TEXT NOT NULL,
+          priority INTEGER NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          installed_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_installed_sources_priority
+          ON installed_sources(priority DESC, installed_at ASC);
+      ''');
+      _db.execute('PRAGMA user_version = 4;');
     }
   }
 
@@ -344,6 +366,94 @@ class UserDatabase {
   }
 
   // ---------------------------------------------------------------------------
+  // Installed Custom Content Sources CRUD (Schema v4)
+  // ---------------------------------------------------------------------------
+
+  void upsertInstalledSource(InstalledSourceRecord record) {
+    _db.execute(
+      '''
+      INSERT INTO installed_sources (
+        source_id, name, version, origin_type, origin_uri,
+        package_dir, capabilities_json, priority, enabled, installed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_id) DO UPDATE SET
+        name = excluded.name,
+        version = excluded.version,
+        origin_type = excluded.origin_type,
+        origin_uri = excluded.origin_uri,
+        package_dir = excluded.package_dir,
+        capabilities_json = excluded.capabilities_json,
+        priority = excluded.priority,
+        enabled = excluded.enabled,
+        installed_at = excluded.installed_at
+      ''',
+      [
+        record.sourceId,
+        record.name,
+        record.version,
+        record.originType.dbKey,
+        record.originUri,
+        record.packageDir,
+        jsonEncode(record.capabilities),
+        record.priority,
+        record.enabled ? 1 : 0,
+        record.installedAt.toUtc().toIso8601String(),
+      ],
+    );
+  }
+
+  List<InstalledSourceRecord> getInstalledSources() {
+    final rows = _db.select(
+      'SELECT * FROM installed_sources ORDER BY priority DESC, installed_at ASC',
+    );
+    return rows.map(InstalledSourceRecord.fromMap).toList(growable: false);
+  }
+
+  InstalledSourceRecord? getInstalledSource(String sourceId) {
+    final rows = _db.select(
+      'SELECT * FROM installed_sources WHERE source_id = ?',
+      [sourceId],
+    );
+    if (rows.isEmpty) return null;
+    return InstalledSourceRecord.fromMap(rows.first);
+  }
+
+  void setInstalledSourceEnabled(String sourceId, bool enabled) {
+    _db.execute(
+      'UPDATE installed_sources SET enabled = ? WHERE source_id = ?',
+      [enabled ? 1 : 0, sourceId],
+    );
+  }
+
+  void updateInstalledSourcePriorities(Map<String, int> priorityBySourceId) {
+    if (priorityBySourceId.isEmpty) return;
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      final stmt = _db.prepare(
+        'UPDATE installed_sources SET priority = ? WHERE source_id = ?',
+      );
+      try {
+        for (final entry in priorityBySourceId.entries) {
+          stmt.execute([entry.value, entry.key]);
+        }
+      } finally {
+        stmt.dispose();
+      }
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void deleteInstalledSource(String sourceId) {
+    _db.execute(
+      'DELETE FROM installed_sources WHERE source_id = ?',
+      [sourceId],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Backup & Restore (Fix #11: survives app reinstall & schema migrations)
   // ---------------------------------------------------------------------------
 
@@ -352,6 +462,9 @@ class UserDatabase {
     final logs = _db.select('SELECT * FROM review_logs ORDER BY id ASC');
     final settings = _db.select('SELECT * FROM user_settings ORDER BY key ASC');
     final metrics = _db.select('SELECT * FROM writing_metrics ORDER BY id ASC');
+    final sources = _db.select(
+      'SELECT * FROM installed_sources ORDER BY priority DESC, installed_at ASC',
+    );
 
     final payload = {
       'schema_version': schemaVersion,
@@ -360,6 +473,7 @@ class UserDatabase {
       'review_logs': logs,
       'user_settings': settings,
       'writing_metrics': metrics,
+      'installed_sources': sources,
     };
     return const JsonEncoder.withIndent('  ').convert(payload);
   }
@@ -370,6 +484,8 @@ class UserDatabase {
     final logs = (decoded['review_logs'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final settings = (decoded['user_settings'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final metrics = (decoded['writing_metrics'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final hasSources = decoded.containsKey('installed_sources');
+    final sources = (decoded['installed_sources'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
     _db.execute('BEGIN TRANSACTION;');
     try {
@@ -377,6 +493,9 @@ class UserDatabase {
       _db.execute('DELETE FROM review_logs;');
       _db.execute('DELETE FROM user_settings;');
       _db.execute('DELETE FROM writing_metrics;');
+      if (hasSources) {
+        _db.execute('DELETE FROM installed_sources;');
+      }
 
       for (final c in cards) {
         upsertCard(UserCardProgress.fromMap(c));
@@ -407,6 +526,11 @@ class UserDatabase {
           durationMs: m['duration_ms'] as int,
           recordedAt: DateTime.parse(m['recorded_at'] as String),
         );
+      }
+      if (hasSources) {
+        for (final src in sources) {
+          upsertInstalledSource(InstalledSourceRecord.fromMap(src));
+        }
       }
       _db.execute('COMMIT;');
     } catch (e) {

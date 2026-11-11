@@ -34,9 +34,9 @@ void main() {
       userDb.close();
     });
 
-    test('UserDatabase initializes with currentSchemaVersion == 3 and writing_metrics table', () {
-      expect(userDb.schemaVersion, equals(3));
-      expect(UserDatabase.currentSchemaVersion, equals(3));
+    test('UserDatabase initializes with currentSchemaVersion == 4 (upgraded from v3) and writing_metrics table', () {
+      expect(userDb.schemaVersion, equals(4));
+      expect(UserDatabase.currentSchemaVersion, equals(4));
 
       // Verify writing_metrics can accept records
       userDb.insertWritingMetric(

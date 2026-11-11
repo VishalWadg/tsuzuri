@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../content/contracts/kanji_audio_source.dart';
 import '../../data/models.dart';
 import '../../domain/exercises/exercise_prompt.dart';
 import '../../providers/app_providers.dart';
@@ -55,11 +56,23 @@ class _AudioPromptCardState extends ConsumerState<AudioPromptCard> {
     }
   }
 
-  void _playAudio() {
+  Future<void> _playAudio() async {
     final settings = ref.read(settingsProvider);
     final speed = _overrideSpeed ?? settings.audioSpeed;
+    final customAudio = widget.prompt.audioPronunciation;
+
+    if (customAudio != null && customAudio.type != AudioPayloadType.ttsFallback) {
+      final mediaRate = speed == AudioSpeed.slow ? 0.75 : 1.0;
+      final audioPlayer = ref.read(audioPlaybackServiceProvider);
+      final played = await audioPlayer.playPronunciation(
+        customAudio,
+        playbackRate: mediaRate,
+      );
+      if (played) return;
+    }
+
     final speechService = ref.read(speechServiceProvider);
-    speechService.speakJapanese(widget.prompt.spokenText, rate: speed.rate);
+    await speechService.speakJapanese(widget.prompt.spokenText, rate: speed.rate);
   }
 
   void _toggleSpeed() {
@@ -76,6 +89,9 @@ class _AudioPromptCardState extends ConsumerState<AudioPromptCard> {
     final settings = ref.watch(settingsProvider);
     final activeSpeed = _overrideSpeed ?? settings.audioSpeed;
     final voiceAvailableAsync = ref.watch(japaneseVoiceAvailableProvider);
+    final customAudio = widget.prompt.audioPronunciation;
+    final usesCustomMediaAudio =
+        customAudio != null && customAudio.type != AudioPayloadType.ttsFallback;
 
     return Card(
       elevation: 0,
@@ -86,37 +102,66 @@ class _AudioPromptCardState extends ConsumerState<AudioPromptCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Voice unavailable warning banner
-            voiceAvailableAsync.when(
-              data: (available) {
-                if (!available) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3E0),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFFB74D)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Japanese TTS voice not found. Please enable ja-JP TTS in system settings.',
-                            style: TextStyle(fontSize: 12, color: Color(0xFFE65100)),
+            // Voice unavailable warning banner (only relevant when falling back to device TTS)
+            if (!usesCustomMediaAudio)
+              voiceAvailableAsync.when(
+                data: (available) {
+                  if (!available) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFFB74D)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Japanese TTS voice not found. Please enable ja-JP TTS in system settings.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFFE65100)),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+
+            if (usesCustomMediaAudio) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      customAudio.type == AudioPayloadType.remoteUrl
+                          ? Icons.cloud_done_outlined
+                          : Icons.library_music_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
+                    const SizedBox(width: 6),
+                    Text(
+                      customAudio.type == AudioPayloadType.remoteUrl
+                          ? 'Remote Custom Audio Source'
+                          : 'Custom Offline Audio Pack',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Header row with title and stroke count
             Row(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'src/content/providers/content_source_providers.dart';
 import 'src/data/content_db.dart';
 import 'src/data/models.dart';
 import 'src/data/user_db.dart';
@@ -14,12 +15,18 @@ Future<void> main() async {
   final contentDb = await ContentDatabase.initialize(appStorageDir: appDocDir);
   final userDb = await UserDatabase.openFromDirectory(appDocDir);
 
+  final container = ProviderContainer(
+    overrides: [
+      contentDatabaseProvider.overrideWithValue(contentDb),
+      userDatabaseProvider.overrideWithValue(userDb),
+      appDocumentsDirectoryProvider.overrideWithValue(appDocDir),
+    ],
+  );
+  await container.read(contentSourceManagerProvider).hydrateOnStartup();
+
   runApp(
-    ProviderScope(
-      overrides: [
-        contentDatabaseProvider.overrideWithValue(contentDb),
-        userDatabaseProvider.overrideWithValue(userDb),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: const OfflineKanjiPracticeApp(),
     ),
   );

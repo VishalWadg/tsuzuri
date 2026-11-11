@@ -153,17 +153,77 @@ class ContentRepository {
 
   /// Merges all unique codepoints from active metadata sources, ordered by:
   /// Grade ASC -> JLPT DESC -> Frequency ASC -> Codepoint ASC.
+  ///
+  /// Uses a single-query batch read when resolving against [BundledMetadataSource] /
+  /// [BundledStrokeSource] while faithfully applying priority overrides from any custom sources.
   Future<List<KanjiCharacter>> getAllKanjiOrdered() async {
-    final codepoints = await getOrderedCodepoints();
-    final list = <KanjiCharacter>[];
+    final startVersion = registry.version;
+    final metaSources = registry.activeMetadataSources;
+    final strokeSources = registry.activeStrokeSources;
 
-    for (final cp in codepoints) {
-      final character = await getKanjiByCodepoint(cp);
-      if (character != null) {
-        list.add(character);
+    // Fast batch preload of bundled characters (avoids N+1 4,000+ SQLite queries on 2,136 Joyo kanji)
+    Map<int, KanjiCharacter>? bundledCache;
+    for (final s in metaSources) {
+      if (s is BundledMetadataSource) {
+        final bundledList = s.contentDb.getAllKanjiOrdered();
+        bundledCache = {for (final k in bundledList) k.codepoint: k};
+        break;
       }
     }
-    return List.unmodifiable(list);
+
+    final hasCustomStrokes = strokeSources.any((s) => !s.isBundledDefault);
+    final hasBundledStrokes = strokeSources.any((s) => s is BundledStrokeSource);
+
+    // 1. Resolve unique metadata entries preserving source priority order
+    final metaByCp = <int, KanjiMetadataEntry>{};
+    for (final source in metaSources) {
+      try {
+        if (source is BundledMetadataSource && bundledCache != null) {
+          for (final k in bundledCache.values) {
+            metaByCp.putIfAbsent(k.codepoint, () => KanjiMetadataEntry.fromKanjiCharacter(k));
+          }
+        } else {
+          final cps = await source.getAllCodepoints();
+          for (final cp in cps) {
+            if (!metaByCp.containsKey(cp)) {
+              final entry = await registry.queryMetadata(cp);
+              if (entry != null) {
+                metaByCp[cp] = entry;
+              }
+            }
+          }
+        }
+      } catch (e, st) {
+        _logSourceError('getAllKanjiOrdered', source.sourceId, e, st);
+      }
+    }
+
+    final sortedEntries = metaByCp.values.toList()..sort(_compareMetadataEntries);
+
+    // 2. Assemble KanjiCharacters with stroke fallback
+    final result = <KanjiCharacter>[];
+    for (final entry in sortedEntries) {
+      final cached = _resolvedCache[entry.codepoint];
+      if (cached != null) {
+        result.add(cached);
+        continue;
+      }
+
+      List<ReferenceStroke>? strokes;
+      if (!hasCustomStrokes && hasBundledStrokes && bundledCache != null) {
+        strokes = bundledCache[entry.codepoint]?.strokes;
+      } else {
+        strokes = await registry.queryStrokes(entry.codepoint);
+      }
+
+      final character = entry.toKanjiCharacter(strokes: strokes ?? const []);
+      if (startVersion == registry.version) {
+        _resolvedCache[entry.codepoint] = character;
+      }
+      result.add(character);
+    }
+
+    return List.unmodifiable(result);
   }
 
   /// Returns unique codepoints ordered by dictionary presentation rules.
@@ -171,24 +231,31 @@ class ContentRepository {
     final seen = <int>{};
     final entries = <KanjiMetadataEntry>[];
 
+    Map<int, KanjiCharacter>? bundledCache;
     for (final source in registry.activeMetadataSources) {
       try {
-        final cps = await source.getAllCodepoints();
-        for (final cp in cps) {
-          if (seen.add(cp)) {
-            final entry = await registry.queryMetadata(cp);
-            if (entry != null) {
-              entries.add(entry);
+        if (source is BundledMetadataSource) {
+          bundledCache ??= {
+            for (final k in source.contentDb.getAllKanjiOrdered()) k.codepoint: k,
+          };
+          for (final k in bundledCache.values) {
+            if (seen.add(k.codepoint)) {
+              entries.add(KanjiMetadataEntry.fromKanjiCharacter(k));
+            }
+          }
+        } else {
+          final cps = await source.getAllCodepoints();
+          for (final cp in cps) {
+            if (seen.add(cp)) {
+              final entry = await registry.queryMetadata(cp);
+              if (entry != null) {
+                entries.add(entry);
+              }
             }
           }
         }
       } catch (e, st) {
-        developer.log(
-          'Error fetching codepoints from ${source.sourceId}: $e',
-          name: 'ContentRepository',
-          error: e,
-          stackTrace: st,
-        );
+        _logSourceError('getOrderedCodepoints', source.sourceId, e, st);
       }
     }
 
@@ -283,12 +350,7 @@ class ContentRepository {
         final cps = await source.getAllCodepoints();
         seen.addAll(cps);
       } catch (e, st) {
-        developer.log(
-          'Error fetching count from ${source.sourceId}: $e',
-          name: 'ContentRepository',
-          error: e,
-          stackTrace: st,
-        );
+        _logSourceError('getTotalCharacterCount', source.sourceId, e, st);
       }
     }
     return seen.length;
@@ -310,6 +372,17 @@ class ContentRepository {
     int count = 3,
   }) =>
       registry.queryReadingDistractors(target, count: count);
+
+  void _logSourceError(String op, String sourceId, Object error, StackTrace st) {
+    final msg = 'ContentRepository.$op error on source "$sourceId": $error';
+    registry.errorLogger?.call(msg, sourceId: sourceId, error: error, stackTrace: st);
+    developer.log(
+      msg,
+      name: 'ContentRepository',
+      error: error,
+      stackTrace: st,
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Comparator
